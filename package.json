@@ -1,0 +1,11 @@
+{
+  "name": "ppf-mobile-app-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "ios": "cd ppf-mobile && npx expo run:ios",
+    "android": "cd ppf-mobile && npx expo run:android",
+    "start": "cd ppf-mobile && npx expo start --dev-client",
+    "ios:clear": "cd ppf-mobile && npx expo run:ios --no-build-cache"
+  }
+}
