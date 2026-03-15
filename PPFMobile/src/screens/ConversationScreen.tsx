@@ -1,297 +1,185 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Alert,
+  View, Text, StyleSheet, FlatList, TextInput,
+  TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import type { RealtimeChannel } from '@supabase/supabase-js';
-import { colors, radius, spacing } from '../theme';
-import { messagesService } from '../services/messages';
-import { useAuth } from '../context/AuthContext';
-import type { Conversation, Message } from '../lib/types';
+import { fetchMessages, sendMessage, type Conv, type Msg } from '../services/messages';
+import { colors, spacing, radius } from '../theme';
 
 type Props = {
-  conversation: Conversation;
+  conv: Conv;
+  userId: string;
+  jwt: string;
   onBack: () => void;
 };
 
-export default function ConversationScreen({ conversation, onBack }: Props) {
-  const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
+export default function ConversationScreen({ conv, userId, jwt, onBack }: Props) {
+  const [msgs, setMsgs] = useState<Msg[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
   const [text, setText] = useState('');
-  const flatListRef = useRef<FlatList>(null);
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const listRef = useRef<FlatList>(null);
 
-  const title =
-    conversation.company?.company_name ??
-    conversation.subject ??
-    'Conversation';
-
-  // ── Load messages ──────────────────────────────────────────────────────────
-  const loadMessages = useCallback(async () => {
-    try {
-      const data = await messagesService.getMessages(conversation.id);
-      setMessages(data);
-    } catch (e: any) {
-      Alert.alert('Error', e.message ?? 'Could not load messages');
-    } finally {
-      setLoading(false);
-    }
-  }, [conversation.id]);
-
-  // ── Realtime subscription ─────────────────────────────────────────────────
   useEffect(() => {
-    loadMessages();
+    fetchMessages(conv.id, jwt)
+      .then(data => { setMsgs(data); setLoading(false); })
+      .catch(e => { setErr(String(e?.message ?? e)); setLoading(false); });
+  }, [conv.id, jwt]);
 
-    channelRef.current = messagesService.subscribeToMessages(
-      conversation.id,
-      (newMsg: Message) => {
-        setMessages(prev => {
-          // Avoid duplicates
-          if (prev.some(m => m.id === newMsg.id)) return prev;
-          return [...prev, newMsg];
-        });
-        // Scroll to bottom
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-      },
-    );
-
-    return () => {
-      channelRef.current?.unsubscribe();
-    };
-  }, [loadMessages, conversation.id]);
-
-  // ── Scroll to bottom on first load ────────────────────────────────────────
-  useEffect(() => {
-    if (!loading && messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 50);
-    }
-  }, [loading]);
-
-  // ── Send message ──────────────────────────────────────────────────────────
-  const handleSend = async () => {
+  async function handleSend() {
     const trimmed = text.trim();
-    if (!trimmed || !user) return;
-    setSending(true);
+    if (!trimmed || sending) return;
     setText('');
+    setSending(true);
     try {
-      const msg = await messagesService.sendMessage(conversation.id, user.id, trimmed);
-      // Optimistically add (realtime will deduplicate)
-      setMessages(prev => {
-        if (prev.some(m => m.id === msg.id)) return prev;
-        return [...prev, msg];
-      });
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      const msg = await sendMessage(conv.id, userId, trimmed, jwt);
+      setMsgs(prev => [...prev, msg]);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (e: any) {
-      setText(trimmed); // restore if failed
-      Alert.alert('Send failed', e.message ?? 'Could not send message');
+      setErr(e?.message ?? 'Failed to send');
+      setText(trimmed); // restore on failure
     } finally {
       setSending(false);
     }
-  };
-
-  // ── Render each message bubble ────────────────────────────────────────────
-  const renderMessage = ({ item, index }: { item: Message; index: number }) => {
-    const isMe = item.sender_id === user?.id;
-    const prev = index > 0 ? messages[index - 1] : null;
-    const showSender = !isMe && item.sender_id !== prev?.sender_id;
-    const senderName = item.sender?.full_name ?? item.sender?.email ?? 'User';
-
-    const time = new Date(item.created_at).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-
-    if (item.is_system_message) {
-      return (
-        <View style={styles.systemMsgWrap}>
-          <Text style={styles.systemMsg}>{item.content}</Text>
-        </View>
-      );
-    }
-
-    return (
-      <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
-        {!isMe && (
-          <View style={styles.msgAvatar}>
-            <Text style={styles.msgAvatarText}>
-              {senderName[0]?.toUpperCase() ?? '?'}
-            </Text>
-          </View>
-        )}
-        <View style={styles.msgContent}>
-          {showSender && (
-            <Text style={styles.msgSender}>{senderName}</Text>
-          )}
-          <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-            <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>
-              {item.content}
-            </Text>
-          </View>
-          <Text style={[styles.msgTime, isMe && styles.msgTimeMe]}>{time}</Text>
-        </View>
-      </View>
-    );
-  };
-
-  // ── Header ────────────────────────────────────────────────────────────────
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <TouchableOpacity style={styles.backBtn} onPress={onBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Text style={styles.backArrow}>‹</Text>
-      </TouchableOpacity>
-      <View style={styles.headerCenter}>
-        <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
-        {conversation.subject && conversation.company && (
-          <Text style={styles.headerSub} numberOfLines={1}>{conversation.subject}</Text>
-        )}
-      </View>
-      <View style={{ width: 36 }} />
-    </View>
-  );
+  }
 
   return (
     <KeyboardAvoidingView
-      style={styles.root}
+      style={s.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}>
-      {renderHeader()}
 
+      {/* Header */}
+      <View style={s.header}>
+        <TouchableOpacity style={s.backBtn} onPress={onBack}>
+          <Text style={s.backTxt}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={s.title} numberOfLines={1}>{conv.subject ?? 'Conversation'}</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      {/* Error banner */}
+      {err && (
+        <View style={s.errBanner}>
+          <Text style={s.errTxt}>{err}</Text>
+          <TouchableOpacity onPress={() => setErr(null)}>
+            <Text style={s.errDismiss}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Messages */}
       {loading ? (
-        <View style={styles.centered}>
+        <View style={s.center}>
           <ActivityIndicator size="large" color={colors.mint} />
         </View>
       ) : (
         <FlatList
-          ref={flatListRef}
-          data={messages}
+          ref={listRef}
+          data={msgs}
           keyExtractor={item => item.id}
-          renderItem={renderMessage}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={s.msgList}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           ListEmptyComponent={
-            <View style={styles.emptyWrap}>
-              <Text style={styles.emptyIcon}>💬</Text>
-              <Text style={styles.emptyText}>No messages yet. Say hello!</Text>
+            <View style={s.center}>
+              <Text style={s.muted}>No messages yet. Say hello! 👋</Text>
             </View>
           }
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          renderItem={({ item }) => {
+            const mine = item.sender_id === userId;
+            return (
+              <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheirs]}>
+                <Text style={[s.bubbleTxt, mine ? s.bubbleTxtMine : s.bubbleTxtTheirs]}>
+                  {item.content}
+                </Text>
+                <Text style={s.bubbleTime}>
+                  {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+              </View>
+            );
+          }}
         />
       )}
 
-      {/* Input bar */}
-      <View style={styles.inputBar}>
+      {/* Input */}
+      <View style={s.inputRow}>
         <TextInput
-          style={styles.input}
+          style={s.input}
           value={text}
           onChangeText={setText}
-          placeholder="Type a message..."
+          placeholder="Type a message…"
           placeholderTextColor={colors.textMuted}
           multiline
-          maxLength={2000}
-          returnKeyType="default"
+          onSubmitEditing={handleSend}
         />
         <TouchableOpacity
-          style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
+          style={[s.sendBtn, (!text.trim() || sending) && s.sendBtnDisabled]}
           onPress={handleSend}
           disabled={!text.trim() || sending}>
-          {sending ? (
-            <ActivityIndicator size="small" color={colors.white} />
-          ) : (
-            <Text style={styles.sendBtnText}>↑</Text>
-          )}
+          <Text style={s.sendTxt}>{sending ? '…' : '↑'}</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
-
-  // Header
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.sm, paddingVertical: 12,
-    backgroundColor: colors.white,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: colors.border,
+    backgroundColor: colors.white,
   },
-  backBtn: { width: 36, alignItems: 'center' },
-  backArrow: { fontSize: 32, color: colors.mint, lineHeight: 36, marginTop: -4 },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
-  headerSub: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
-
-  // List
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  listContent: { paddingHorizontal: spacing.sm, paddingVertical: spacing.md, flexGrow: 1 },
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
-  emptyIcon: { fontSize: 40, marginBottom: 10 },
-  emptyText: { fontSize: 15, color: colors.textMuted },
-
-  // Message rows
-  msgRow: { flexDirection: 'row', marginBottom: 8, alignItems: 'flex-end' },
-  msgRowMe: { flexDirection: 'row-reverse' },
-  msgAvatar: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: colors.mintMid, alignItems: 'center', justifyContent: 'center',
-    marginRight: 6, marginBottom: 2,
+  backBtn: { width: 60 },
+  backTxt: { fontSize: 15, color: colors.mint, fontWeight: '600' },
+  title: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, flex: 1, textAlign: 'center' },
+  errBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#fff5f5', paddingHorizontal: spacing.md, paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: '#fed7d7',
   },
-  msgAvatarText: { fontSize: 12, fontWeight: '700', color: colors.mintDark },
-  msgContent: { maxWidth: '75%' },
-  msgSender: { fontSize: 11, color: colors.textMuted, marginBottom: 3, marginLeft: 12 },
+  errTxt: { fontSize: 13, color: '#e53e3e', flex: 1 },
+  errDismiss: { fontSize: 16, color: '#e53e3e', paddingLeft: 12 },
+  muted: { fontSize: 14, color: colors.textMuted },
+  msgList: { padding: spacing.md, paddingBottom: 12 },
   bubble: {
-    borderRadius: radius.lg, paddingHorizontal: 14, paddingVertical: 9,
+    maxWidth: '80%', borderRadius: radius.md, padding: 10,
+    marginBottom: 8,
   },
-  bubbleMe: {
-    backgroundColor: colors.mint,
+  bubbleMine: {
+    alignSelf: 'flex-end', backgroundColor: colors.mint,
     borderBottomRightRadius: 4,
   },
-  bubbleThem: {
-    backgroundColor: colors.white,
+  bubbleTheirs: {
+    alignSelf: 'flex-start', backgroundColor: colors.white,
     borderBottomLeftRadius: 4,
     borderWidth: 1, borderColor: colors.border,
   },
-  bubbleText: { fontSize: 15, color: colors.textPrimary, lineHeight: 21 },
-  bubbleTextMe: { color: colors.white },
-  msgTime: { fontSize: 10, color: colors.textMuted, marginTop: 3, marginLeft: 12 },
-  msgTimeMe: { textAlign: 'right', marginRight: 4 },
-
-  // System messages
-  systemMsgWrap: { alignItems: 'center', marginVertical: 8 },
-  systemMsg: {
-    fontSize: 12, color: colors.textMuted,
-    backgroundColor: colors.border, borderRadius: radius.full,
-    paddingHorizontal: 12, paddingVertical: 4,
-  },
-
-  // Input bar
-  inputBar: {
+  bubbleTxt: { fontSize: 15, lineHeight: 20 },
+  bubbleTxtMine: { color: '#fff' },
+  bubbleTxtTheirs: { color: colors.textPrimary },
+  bubbleTime: { fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 4, alignSelf: 'flex-end' },
+  inputRow: {
     flexDirection: 'row', alignItems: 'flex-end',
-    paddingHorizontal: spacing.sm, paddingVertical: 10,
-    backgroundColor: colors.white,
+    paddingHorizontal: spacing.md, paddingVertical: 10,
     borderTopWidth: 1, borderTopColor: colors.border,
+    backgroundColor: colors.white,
   },
   input: {
-    flex: 1, backgroundColor: colors.bg,
-    borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border,
-    paddingHorizontal: 14, paddingTop: 10, paddingBottom: 10,
+    flex: 1, minHeight: 40, maxHeight: 120,
+    borderWidth: 1, borderColor: colors.border, borderRadius: 20,
+    paddingHorizontal: 16, paddingVertical: 8,
     fontSize: 15, color: colors.textPrimary,
-    maxHeight: 120, marginRight: 8,
+    backgroundColor: colors.bg,
+    marginRight: 10,
   },
   sendBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: colors.mint,
-    alignItems: 'center', justifyContent: 'center',
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center',
   },
   sendBtnDisabled: { backgroundColor: colors.mintMid },
-  sendBtnText: { fontSize: 20, color: colors.white, fontWeight: '700', marginTop: -2 },
+  sendTxt: { fontSize: 18, color: '#fff', fontWeight: '700', lineHeight: 22 },
 });

@@ -1,219 +1,304 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, ActivityIndicator, RefreshControl,
+  View, Text, StyleSheet, FlatList, TextInput,
+  TouchableOpacity, ActivityIndicator, Modal, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { colors, radius, spacing } from '../theme';
-import { messagesService } from '../services/messages';
 import { useAuth } from '../context/AuthContext';
-import type { Conversation } from '../lib/types';
+import {
+  fetchConversations, searchUsers, getOrCreateConversation,
+  type Conv, type UserResult,
+} from '../services/messages';
+import { colors, spacing, radius } from '../theme';
 import ConversationScreen from './ConversationScreen';
 
 type Props = { onNavigate: (screen: string) => void };
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d ago`;
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function avatarLetters(name: string): string {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
-}
-
 export default function MessagesScreen({ onNavigate }: Props) {
-  const { user } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [openConv, setOpenConv] = useState<Conversation | null>(null);
+  const { user, session } = useAuth();
+  const jwt = session?.access_token ?? '';
 
-  // ── If a conversation is open, show its screen ───────────────────────────
-  if (openConv) {
+  // ── Conversation list state ───────────────────────────────────────────────
+  const [convs,   setConvs]   = useState<Conv[]>([]);
+  const [status,  setStatus]  = useState<'loading' | 'error' | 'done'>('loading');
+  const [err,     setErr]     = useState<string | null>(null);
+  const [open,    setOpen]    = useState<Conv | null>(null);
+
+  // ── New Message modal state ───────────────────────────────────────────────
+  const [showModal,    setShowModal]    = useState(false);
+  const [searchQuery,  setSearchQuery]  = useState('');
+  const [searchResults, setSearchResults] = useState<UserResult[]>([]);
+  const [searching,    setSearching]    = useState(false);
+  const [starting,     setStarting]     = useState(false);
+  const [modalErr,     setModalErr]     = useState<string | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Load conversations ────────────────────────────────────────────────────
+  function loadConvs() {
+    if (!user || !jwt) { setStatus('done'); return; }
+    setStatus('loading');
+    setErr(null);
+    fetchConversations(user.id, jwt)
+      .then(data => { setConvs(data); setStatus('done'); })
+      .catch(e  => { setErr(String(e?.message ?? e)); setStatus('error'); });
+  }
+
+  useEffect(() => { loadConvs(); }, [user?.id, jwt]);
+
+  // ── Search users (debounced 400ms) ────────────────────────────────────────
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (searchQuery.trim().length < 2) { setSearchResults([]); return; }
+
+    setSearching(true);
+    searchTimer.current = setTimeout(() => {
+      searchUsers(searchQuery.trim(), jwt)
+        .then(r  => { setSearchResults(r.filter(u => u.id !== user?.id)); setSearching(false); })
+        .catch(() => setSearching(false));
+    }, 400);
+
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [searchQuery, jwt]);
+
+  // ── Start conversation ────────────────────────────────────────────────────
+  async function startConversation(other: UserResult) {
+    if (!user || starting) return;
+    setStarting(true);
+    setModalErr(null);
+    try {
+      const conv = await getOrCreateConversation(user.id, other.id, jwt);
+      // Add to list if not already there
+      setConvs(prev => prev.find(c => c.id === conv.id) ? prev : [conv, ...prev]);
+      closeModal();
+      setOpen(conv);
+    } catch (e: any) {
+      setModalErr(String(e?.message ?? e));
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  function closeModal() {
+    setShowModal(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setModalErr(null);
+  }
+
+  // ── Render: open conversation ─────────────────────────────────────────────
+  if (open) {
     return (
       <ConversationScreen
-        conversation={openConv}
-        onBack={() => setOpenConv(null)}
+        conv={open}
+        userId={user!.id}
+        jwt={jwt}
+        onBack={() => { setOpen(null); loadConvs(); }}
       />
     );
   }
 
-  const load = useCallback(async (isRefresh = false) => {
-    if (!user) { setLoading(false); return; }
-    try {
-      isRefresh ? setRefreshing(true) : setLoading(true);
-      setError(null);
-      const data = await messagesService.getMyConversations(user.id);
-      setConversations(data);
-    } catch (e: any) {
-      setError(e.message ?? 'Failed to load messages');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [user]);
-
-  useEffect(() => { load(); }, [load]);
-
-  if (loading) {
+  // ── Render: loading / error ───────────────────────────────────────────────
+  if (status === 'loading') {
     return (
-      <View style={styles.centered}>
+      <View style={s.center}>
         <ActivityIndicator size="large" color={colors.mint} />
-        <Text style={styles.loadingText}>Loading messages...</Text>
+        <Text style={s.muted}>Loading messages…</Text>
       </View>
     );
   }
 
-  if (!user) {
+  if (status === 'error') {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyIcon}>💬</Text>
-        <Text style={styles.emptyTitle}>Sign in to view messages</Text>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => onNavigate('Auth')}>
-          <Text style={styles.actionBtnText}>Sign In</Text>
+      <View style={s.center}>
+        <Text style={s.errText}>{err}</Text>
+        <TouchableOpacity style={s.btn} onPress={loadConvs}>
+          <Text style={s.btnTxt}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
-  const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count ?? 0), 0);
-
+  // ── Render: main inbox ────────────────────────────────────────────────────
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Messages</Text>
-          {totalUnread > 0 && (
-            <Text style={styles.headerSub}>{totalUnread} unread message{totalUnread !== 1 ? 's' : ''}</Text>
-          )}
-        </View>
-        <TouchableOpacity style={styles.composeBtn}>
-          <Text style={styles.composeBtnText}>+ New</Text>
+    <View style={s.root}>
+      {/* Header */}
+      <View style={s.header}>
+        <Text style={s.title}>Messages</Text>
+        <TouchableOpacity style={s.btn} onPress={() => setShowModal(true)}>
+          <Text style={s.btnTxt}>+ New</Text>
         </TouchableOpacity>
       </View>
 
-      {error ? (
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => load()}>
-            <Text style={styles.retryText}>Retry</Text>
+      {/* Conversation list */}
+      {convs.length === 0 ? (
+        <View style={s.center}>
+          <Text style={{ fontSize: 48 }}>💬</Text>
+          <Text style={s.emptyTitle}>No conversations yet</Text>
+          <Text style={s.muted}>Start a new message to get going</Text>
+          <TouchableOpacity style={[s.btn, { marginTop: 20 }]} onPress={() => setShowModal(true)}>
+            <Text style={s.btnTxt}>+ New Message</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.mint} />
-          }>
-          {conversations.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>💬</Text>
-              <Text style={styles.emptyTitle}>No conversations yet</Text>
-              <Text style={styles.emptySub}>Contact a supplier to get started</Text>
-              <TouchableOpacity style={styles.actionBtn} onPress={() => onNavigate('Marketplace')}>
-                <Text style={styles.actionBtnText}>Browse Suppliers</Text>
+        <FlatList
+          data={convs}
+          keyExtractor={item => item.id}
+          contentContainerStyle={{ paddingBottom: 40 }}
+          renderItem={({ item }) => {
+            const initial = (item.subject ?? item.created_by ?? 'C')[0].toUpperCase();
+            return (
+              <TouchableOpacity style={s.row} onPress={() => setOpen(item)}>
+                <View style={s.avatar}>
+                  <Text style={s.avatarTxt}>{initial}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.rowTitle} numberOfLines={1}>
+                    {item.subject ?? 'Direct Message'}
+                  </Text>
+                  <Text style={s.rowSub}>
+                    {item.last_message_at
+                      ? new Date(item.last_message_at).toLocaleDateString()
+                      : item.status ?? 'active'}
+                  </Text>
+                </View>
+                <Text style={s.chevron}>›</Text>
               </TouchableOpacity>
-            </View>
-          ) : (
-            conversations.map((conv) => {
-              const unread = conv.unread_count ?? 0;
-              const title = conv.subject ?? 'Conversation';
-              return (
-                <TouchableOpacity key={conv.id} style={[styles.row, unread > 0 && styles.rowUnread]} activeOpacity={0.85} onPress={() => setOpenConv(conv)}>
-                  <View style={[styles.avatar, unread > 0 && styles.avatarUnread]}>
-                    <Text style={styles.avatarText}>{avatarLetters(title)}</Text>
-                  </View>
-                  <View style={styles.rowContent}>
-                    <View style={styles.rowTop}>
-                      <Text style={[styles.rowTitle, unread > 0 && styles.rowTitleBold]} numberOfLines={1}>
-                        {title}
-                      </Text>
-                      <Text style={styles.rowTime}>
-                        {conv.last_message_at ? timeAgo(conv.last_message_at) : ''}
-                      </Text>
-                    </View>
-                    <View style={styles.rowBottom}>
-                      <Text style={styles.rowSub} numberOfLines={1}>
-                        {conv.status === 'active' ? 'Active' : conv.status}
-                      </Text>
-                      {unread > 0 && (
-                        <View style={styles.badge}>
-                          <Text style={styles.badgeText}>{unread}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              );
-            })
-          )}
-          <View style={{ height: 32 }} />
-        </ScrollView>
+            );
+          }}
+        />
       )}
+
+      {/* ── New Message Modal ─────────────────────────────────────────────── */}
+      <Modal
+        visible={showModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closeModal}>
+        <KeyboardAvoidingView
+          style={s.modal}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+
+          {/* Modal header */}
+          <View style={s.modalHeader}>
+            <TouchableOpacity onPress={closeModal} style={s.modalCancel}>
+              <Text style={s.modalCancelTxt}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={s.modalTitle}>New Message</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          {/* Search input */}
+          <View style={s.searchRow}>
+            <Text style={s.searchLabel}>To:</Text>
+            <TextInput
+              style={s.searchInput}
+              placeholder="Search by name…"
+              placeholderTextColor={colors.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+              autoCorrect={false}
+            />
+            {searching && <ActivityIndicator size="small" color={colors.mint} style={{ marginLeft: 8 }} />}
+          </View>
+
+          {/* Error */}
+          {modalErr && (
+            <Text style={s.modalErr}>{modalErr}</Text>
+          )}
+
+          {/* Results */}
+          <FlatList
+            data={searchResults}
+            keyExtractor={item => item.id}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 40 }}
+            ListEmptyComponent={
+              searchQuery.trim().length >= 2 && !searching ? (
+                <Text style={[s.muted, { padding: 24, textAlign: 'center' }]}>No users found</Text>
+              ) : searchQuery.trim().length < 2 ? (
+                <Text style={[s.muted, { padding: 24, textAlign: 'center' }]}>Type 2+ characters to search</Text>
+              ) : null
+            }
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={s.resultRow}
+                onPress={() => startConversation(item)}
+                disabled={starting}>
+                <View style={s.resultAvatar}>
+                  <Text style={s.avatarTxt}>
+                    {(item.full_name ?? item.email)[0].toUpperCase()}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.rowTitle}>{item.full_name ?? '—'}</Text>
+                  <Text style={s.rowSub}>{item.email}</Text>
+                </View>
+                {starting && <ActivityIndicator size="small" color={colors.mint} />}
+              </TouchableOpacity>
+            )}
+          />
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end',
-    paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm,
+const s = StyleSheet.create({
+  root:        { flex: 1, backgroundColor: colors.bg },
+  center:      { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  header:      {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  headerTitle: { fontSize: 26, fontWeight: '800', color: colors.textPrimary },
-  headerSub: { fontSize: 13, color: colors.mint, marginTop: 2, fontWeight: '600' },
-  composeBtn: {
-    backgroundColor: colors.mint, borderRadius: radius.md,
-    paddingHorizontal: 14, paddingVertical: 8,
-  },
-  composeBtnText: { fontSize: 13, fontWeight: '700', color: colors.white },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-  loadingText: { marginTop: 12, fontSize: 14, color: colors.textMuted },
-  errorText: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginBottom: 16 },
-  retryBtn: { backgroundColor: colors.mint, borderRadius: radius.md, paddingHorizontal: 24, paddingVertical: 12 },
-  retryText: { fontSize: 14, fontWeight: '700', color: colors.white },
-  emptyState: { alignItems: 'center', paddingTop: 80 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 6 },
-  emptySub: { fontSize: 14, color: colors.textMuted, marginBottom: 20 },
-  actionBtn: { backgroundColor: colors.mint, borderRadius: radius.md, paddingHorizontal: 24, paddingVertical: 12 },
-  actionBtnText: { fontSize: 14, fontWeight: '700', color: colors.white },
-  row: {
+  title:       { fontSize: 24, fontWeight: '800', color: colors.textPrimary },
+  muted:       { fontSize: 14, color: colors.textMuted, marginTop: 8, textAlign: 'center' },
+  errText:     { fontSize: 13, color: '#e53e3e', textAlign: 'center', marginBottom: 16 },
+  emptyTitle:  { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginTop: 8, marginBottom: 4 },
+  btn:         { backgroundColor: colors.mint, borderRadius: radius.md, paddingHorizontal: 20, paddingVertical: 10 },
+  btnTxt:      { fontSize: 14, fontWeight: '700', color: '#fff' },
+  row:         {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: spacing.md, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: colors.border,
     backgroundColor: colors.white,
-    marginBottom: 1,
   },
-  rowUnread: { backgroundColor: colors.mintLight },
-  avatar: {
-    width: 48, height: 48, borderRadius: 24,
-    backgroundColor: colors.mintMid, alignItems: 'center', justifyContent: 'center',
-    marginRight: 14,
+  avatar:      {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: colors.mintMid, alignItems: 'center', justifyContent: 'center', marginRight: 12,
   },
-  avatarUnread: { backgroundColor: colors.mint },
-  avatarText: { fontSize: 16, fontWeight: '800', color: colors.mintDark },
-  rowContent: { flex: 1 },
-  rowTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  rowTitle: { fontSize: 15, fontWeight: '500', color: colors.textPrimary, flex: 1, marginRight: 8 },
-  rowTitleBold: { fontWeight: '700' },
-  rowTime: { fontSize: 12, color: colors.textMuted },
-  rowBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowSub: { fontSize: 13, color: colors.textMuted, flex: 1 },
-  badge: {
-    backgroundColor: colors.mint, borderRadius: 10,
-    minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6,
+  avatarTxt:   { fontSize: 16, fontWeight: '800', color: colors.mintDark },
+  rowTitle:    { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  rowSub:      { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  chevron:     { fontSize: 22, color: colors.textMuted, marginLeft: 8 },
+  // Modal
+  modal:       { flex: 1, backgroundColor: colors.bg },
+  modalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, paddingTop: 20, paddingBottom: 14,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+    backgroundColor: colors.white,
   },
-  badgeText: { fontSize: 11, fontWeight: '800', color: colors.white },
+  modalTitle:     { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
+  modalCancel:    { width: 60 },
+  modalCancelTxt: { fontSize: 16, color: colors.mint },
+  modalErr:       { fontSize: 13, color: '#e53e3e', paddingHorizontal: spacing.md, paddingVertical: 8 },
+  searchRow:   {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.md, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  searchLabel: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary },
+  resultRow:   {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.md, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  resultAvatar: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.mintMid, alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
 });
