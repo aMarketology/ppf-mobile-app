@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,71 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { colors, radius, spacing } from '../theme';
-
-const ALL_SUPPLIERS = [
-  {
-    name: 'Bechtel Corporation',
-    category: 'Civil Engineering',
-    location: 'Reston, VA',
-    rating: '4.9',
-    reviews: 127,
-    tags: ['Infrastructure', 'Power Generation', 'Mining'],
-    isVerified: true,
-    isPremium: true,
-  },
-  {
-    name: 'AECOM',
-    category: 'Transportation',
-    location: 'Dallas, TX',
-    rating: '4.8',
-    reviews: 203,
-    tags: ['Urban Planning', 'Water Treatment', 'Environmental'],
-    isVerified: true,
-    isPremium: true,
-  },
-  {
-    name: 'Fluor Corporation',
-    category: 'Energy & Chemicals',
-    location: 'Irving, TX',
-    rating: '4.7',
-    reviews: 156,
-    tags: ['Oil & Gas', 'Petrochemicals', 'Refining'],
-    isVerified: true,
-    isPremium: true,
-  },
-  {
-    name: 'Jacobs Engineering',
-    category: 'Mechanical Engineering',
-    location: 'Dallas, TX',
-    rating: '4.6',
-    reviews: 89,
-    tags: ['Process Engineering', 'Nuclear', 'Aerospace'],
-    isVerified: true,
-    isPremium: false,
-  },
-  {
-    name: 'HDR Inc.',
-    category: 'Environmental',
-    location: 'Omaha, NE',
-    rating: '4.5',
-    reviews: 74,
-    tags: ['Water Resources', 'Environmental', 'Architecture'],
-    isVerified: true,
-    isPremium: false,
-  },
-  {
-    name: 'Burns & McDonnell',
-    category: 'Electrical Engineering',
-    location: 'Kansas City, MO',
-    rating: '4.8',
-    reviews: 112,
-    tags: ['Power Delivery', 'Renewables', 'T&D'],
-    isVerified: true,
-    isPremium: false,
-  },
-];
+import { companiesService } from '../services/companies';
+import type { CompanyProfile } from '../lib/types';
 
 const FILTER_TABS = ['All', 'Civil', 'Mechanical', 'Electrical', 'Energy'];
 
@@ -79,16 +20,36 @@ type Props = { onNavigate: (screen: string) => void };
 export default function MarketplaceScreen({ onNavigate }: Props) {
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
+  const [companies, setCompanies] = useState<CompanyProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = ALL_SUPPLIERS.filter(s => {
+  const load = useCallback(async (isRefresh = false) => {
+    try {
+      isRefresh ? setRefreshing(true) : setLoading(true);
+      setError(null);
+      const data = await companiesService.getAll({ verified: true });
+      setCompanies(data);
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to load suppliers');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = companies.filter(c => {
     const matchSearch =
       search === '' ||
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.category.toLowerCase().includes(search.toLowerCase()) ||
-      s.tags.some(t => t.toLowerCase().includes(search.toLowerCase()));
+      c.company_name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.description ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.specialties ?? []).some(s => s.toLowerCase().includes(search.toLowerCase()));
     const matchFilter =
       activeFilter === 'All' ||
-      s.category.toLowerCase().includes(activeFilter.toLowerCase());
+      (c.specialties ?? []).some(s => s.toLowerCase().includes(activeFilter.toLowerCase()));
     return matchSearch && matchFilter;
   });
 
@@ -98,7 +59,7 @@ export default function MarketplaceScreen({ onNavigate }: Props) {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Marketplace</Text>
         <Text style={styles.headerSub}>
-          {ALL_SUPPLIERS.length.toLocaleString()} verified suppliers
+          {loading ? '...' : `${companies.length.toLocaleString()} verified suppliers`}
         </Text>
       </View>
 
@@ -131,59 +92,98 @@ export default function MarketplaceScreen({ onNavigate }: Props) {
             key={i}
             style={[styles.filterTab, activeFilter === f && styles.filterTabActive]}
             onPress={() => setActiveFilter(f)}>
-            <Text
-              style={[
-                styles.filterTabText,
-                activeFilter === f && styles.filterTabTextActive,
-              ]}>
+            <Text style={[styles.filterTabText, activeFilter === f && styles.filterTabTextActive]}>
               {f}
             </Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
-      {/* Results */}
-      <ScrollView showsVerticalScrollIndicator={false} style={styles.list}>
-        <Text style={styles.resultCount}>{filtered.length} results</Text>
-        {filtered.map((s, i) => (
-          <TouchableOpacity key={i} style={styles.card} activeOpacity={0.85}>
-            {s.isPremium && (
-              <View style={styles.premiumBanner}>
-                <Text style={styles.premiumText}>⭐ Premium Verified</Text>
-              </View>
-            )}
-            <View style={styles.cardTop}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{s.name.charAt(0)}</Text>
-              </View>
-              <View style={styles.info}>
-                <Text style={styles.name}>{s.name}</Text>
-                <Text style={styles.category}>{s.category}</Text>
-                <Text style={styles.location}>📍 {s.location}</Text>
-              </View>
-            </View>
-            <View style={styles.tags}>
-              {s.tags.map((tag, j) => (
-                <View key={j} style={styles.tag}>
-                  <Text style={styles.tagText}>{tag}</Text>
-                </View>
-              ))}
-            </View>
-            <View style={styles.cardFooter}>
-              <Text style={styles.rating}>⭐ {s.rating}</Text>
-              <Text style={styles.reviews}>({s.reviews})</Text>
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity style={styles.profileBtn}>
-                <Text style={styles.profileBtnText}>View Profile</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.quoteBtn}>
-                <Text style={styles.quoteBtnText}>Get Quote</Text>
-              </TouchableOpacity>
-            </View>
+      {/* Content */}
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.mint} />
+          <Text style={styles.loadingText}>Loading suppliers...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.centered}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => load()}>
+            <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
-        ))}
-        <View style={{ height: 32 }} />
-      </ScrollView>
+        </View>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={styles.list}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => load(true)}
+              tintColor={colors.mint}
+            />
+          }>
+          <Text style={styles.resultCount}>{filtered.length} results</Text>
+          {filtered.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>🔍</Text>
+              <Text style={styles.emptyText}>No suppliers found</Text>
+              <Text style={styles.emptySubtext}>Try adjusting your search or filters</Text>
+            </View>
+          ) : (
+            filtered.map((s, i) => (
+              <TouchableOpacity key={s.id ?? i} style={styles.card} activeOpacity={0.85}>
+                {s.is_verified && (
+                  <View style={styles.premiumBanner}>
+                    <Text style={styles.premiumText}>✓ Verified Supplier</Text>
+                  </View>
+                )}
+                <View style={styles.cardTop}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{s.company_name.charAt(0)}</Text>
+                  </View>
+                  <View style={styles.info}>
+                    <Text style={styles.name}>{s.company_name}</Text>
+                    {s.specialties && s.specialties.length > 0 && (
+                      <Text style={styles.category}>{s.specialties[0]}</Text>
+                    )}
+                    {(s.city || s.state) && (
+                      <Text style={styles.location}>
+                        📍 {[s.city, s.state].filter(Boolean).join(', ')}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                {s.description && (
+                  <Text style={styles.description} numberOfLines={2}>
+                    {s.description}
+                  </Text>
+                )}
+                {s.specialties && s.specialties.length > 0 && (
+                  <View style={styles.tags}>
+                    {s.specialties.slice(0, 3).map((tag, j) => (
+                      <View key={j} style={styles.tag}>
+                        <Text style={styles.tagText}>{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <View style={styles.cardFooter}>
+                  <View style={{ flex: 1 }} />
+                  <TouchableOpacity style={styles.profileBtn}>
+                    <Text style={styles.profileBtnText}>View Profile</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.quoteBtn}>
+                    <Text style={styles.quoteBtnText}>Get Quote</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+          <View style={{ height: 32 }} />
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -195,11 +195,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: 8,
   },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
+  headerTitle: { fontSize: 26, fontWeight: '800', color: colors.textPrimary },
   headerSub: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   searchRow: { paddingHorizontal: spacing.md, marginBottom: spacing.sm },
   searchBox: {
@@ -228,19 +224,26 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.border,
   },
-  filterTabActive: {
-    backgroundColor: colors.mint,
-    borderColor: colors.mint,
-  },
+  filterTabActive: { backgroundColor: colors.mint, borderColor: colors.mint },
   filterTabText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   filterTabTextActive: { color: colors.white },
   list: { flex: 1, paddingHorizontal: spacing.md },
-  resultCount: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginBottom: spacing.sm,
-    fontWeight: '500',
+  resultCount: { fontSize: 13, color: colors.textMuted, marginBottom: spacing.sm, fontWeight: '500' },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  loadingText: { marginTop: 12, fontSize: 14, color: colors.textMuted },
+  errorIcon: { fontSize: 40, marginBottom: 12 },
+  errorText: { fontSize: 15, color: colors.textSecondary, textAlign: 'center', marginBottom: 16 },
+  retryBtn: {
+    backgroundColor: colors.mint,
+    borderRadius: radius.md,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
   },
+  retryText: { fontSize: 14, fontWeight: '700', color: colors.white },
+  emptyState: { alignItems: 'center', paddingTop: 60 },
+  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  emptyText: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 6 },
+  emptySubtext: { fontSize: 14, color: colors.textMuted },
   card: {
     backgroundColor: colors.white,
     borderRadius: radius.lg,
@@ -257,11 +260,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.mintMid,
   },
   premiumText: { fontSize: 11, fontWeight: '700', color: colors.mintDark },
-  cardTop: {
-    flexDirection: 'row',
-    padding: spacing.md,
-    paddingBottom: 8,
-  },
+  cardTop: { flexDirection: 'row', padding: spacing.md, paddingBottom: 8 },
   avatar: {
     width: 48,
     height: 48,
@@ -276,13 +275,14 @@ const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
   category: { fontSize: 13, color: colors.textSecondary, marginBottom: 2 },
   location: { fontSize: 12, color: colors.textMuted },
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
+  description: {
+    fontSize: 13,
+    color: colors.textSecondary,
     paddingHorizontal: spacing.md,
-    marginBottom: 12,
+    marginBottom: 10,
+    lineHeight: 19,
   },
+  tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: spacing.md, marginBottom: 12 },
   tag: {
     backgroundColor: colors.bg,
     borderRadius: radius.full,
@@ -299,8 +299,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
     gap: 6,
   },
-  rating: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
-  reviews: { fontSize: 12, color: colors.textMuted },
   profileBtn: {
     borderWidth: 1.5,
     borderColor: colors.border,

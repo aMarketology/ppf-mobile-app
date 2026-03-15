@@ -1,92 +1,101 @@
 import React from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
 } from 'react-native';
 import { colors, radius, spacing } from '../theme';
+import { useAuth } from '../context/AuthContext';
 
 type Props = { onNavigate: (screen: string) => void };
 
 export default function ProfileScreen({ onNavigate }: Props) {
+  const { user, profile, signOut } = useAuth();
+
+  const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'User';
+  const email = user?.email ?? '';
+  const initials = displayName
+    .split(' ')
+    .slice(0, 2)
+    .map((w: string) => w[0]?.toUpperCase() ?? '')
+    .join('') || '?';
+  const accountType = profile?.user_type === 'engineer' ? 'Engineer Account' : 'Client Account';
+
+  const handleSignOut = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: () => signOut(),
+      },
+    ]);
+  };
+
   const MENU_ITEMS = [
     { icon: '🏢', label: 'Company Profile', sub: 'Manage your company listing' },
     { icon: '📋', label: 'My Orders', sub: 'View order history', screen: 'Orders' },
     { icon: '💬', label: 'Messages', sub: 'Inbox & conversations', screen: 'Messages' },
-    { icon: '⭐', label: 'Saved Suppliers', sub: '12 suppliers saved' },
+    { icon: '⭐', label: 'Saved Suppliers', sub: 'Bookmarked suppliers' },
     { icon: '🔔', label: 'Notifications', sub: 'Manage alerts' },
     { icon: '🔒', label: 'Security', sub: 'Password & 2FA' },
     { icon: '💳', label: 'Billing', sub: 'Payment methods & invoices' },
     { icon: '❓', label: 'Help & Support', sub: 'FAQs and contact us' },
   ];
 
+  if (!user) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.emptyIcon}>👤</Text>
+        <Text style={styles.emptyText}>Sign in to view your profile</Text>
+        <TouchableOpacity style={styles.signInBtn} onPress={() => onNavigate('Auth')}>
+          <Text style={styles.signInBtnText}>Sign In</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Profile card */}
       <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>JD</Text>
+        <View style={styles.avatarCircle}>
+          <Text style={styles.avatarText}>{initials}</Text>
         </View>
-        <Text style={styles.name}>John Doe</Text>
-        <Text style={styles.email}>john.doe@company.com</Text>
+        <Text style={styles.name}>{displayName}</Text>
+        <Text style={styles.email}>{email}</Text>
         <View style={styles.typeBadge}>
-          <Text style={styles.typeText}>Client Account</Text>
+          <Text style={styles.typeText}>{accountType}</Text>
         </View>
         <TouchableOpacity style={styles.editBtn}>
           <Text style={styles.editBtnText}>Edit Profile</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Stats */}
-      <View style={styles.statsRow}>
-        {[
-          { value: '4', label: 'Orders' },
-          { value: '3', label: 'Active RFQs' },
-          { value: '12', label: 'Saved' },
-        ].map((s, i) => (
-          <View key={i} style={[styles.stat, i < 2 && styles.statBorder]}>
-            <Text style={styles.statValue}>{s.value}</Text>
-            <Text style={styles.statLabel}>{s.label}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Supplier CTA */}
-      <TouchableOpacity style={styles.supplierCta} activeOpacity={0.85}>
-        <View>
-          <Text style={styles.ctaTitle}>Are you a supplier?</Text>
-          <Text style={styles.ctaSub}>
-            Register your company and start receiving qualified RFQs
-          </Text>
-        </View>
-        <Text style={styles.ctaArrow}>→</Text>
-      </TouchableOpacity>
-
-      {/* Menu */}
-      <View style={styles.menu}>
-        {MENU_ITEMS.map((item, i) => (
+      {/* Menu items */}
+      <View style={styles.menuCard}>
+        {MENU_ITEMS.map((item, index) => (
           <TouchableOpacity
-            key={i}
-            style={[styles.menuRow, i < MENU_ITEMS.length - 1 && styles.menuBorder]}
-            activeOpacity={0.7}
-            onPress={() => item.screen && onNavigate(item.screen)}>
-            <Text style={styles.menuIcon}>{item.icon}</Text>
-            <View style={styles.menuContent}>
+            key={index}
+            style={[styles.menuRow, index < MENU_ITEMS.length - 1 && styles.menuRowBorder]}
+            onPress={() => item.screen && onNavigate(item.screen)}
+            activeOpacity={0.7}>
+            <View style={styles.menuIcon}>
+              <Text style={styles.menuIconText}>{item.icon}</Text>
+            </View>
+            <View style={styles.menuText}>
               <Text style={styles.menuLabel}>{item.label}</Text>
               <Text style={styles.menuSub}>{item.sub}</Text>
             </View>
-            <Text style={styles.menuArrow}>›</Text>
+            <Text style={styles.menuChevron}>›</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <TouchableOpacity style={styles.signOutBtn}>
+      {/* Sign out */}
+      <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
 
-      <Text style={styles.version}>Precision Project Flow v1.0.0</Text>
+      <Text style={styles.version}>Precision Project Flow v1.0</Text>
       <View style={{ height: 32 }} />
     </ScrollView>
   );
@@ -94,119 +103,60 @@ export default function ProfileScreen({ onNavigate }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  emptyText: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 20 },
+  signInBtn: { backgroundColor: colors.mint, borderRadius: radius.md, paddingHorizontal: 24, paddingVertical: 12 },
+  signInBtnText: { fontSize: 14, fontWeight: '700', color: colors.white },
   profileCard: {
-    backgroundColor: colors.white,
-    margin: spacing.md,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.mint, alignItems: 'center',
+    paddingTop: 36, paddingBottom: 28, paddingHorizontal: spacing.lg,
   },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.mint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-    shadowColor: colors.mint,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 4,
+  avatarCircle: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 14, borderWidth: 3, borderColor: colors.white,
   },
-  avatarText: { fontSize: 30, fontWeight: '800', color: colors.white },
-  name: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    marginBottom: 4,
-  },
-  email: { fontSize: 14, color: colors.textMuted, marginBottom: 12 },
+  avatarText: { fontSize: 28, fontWeight: '800', color: colors.white },
+  name: { fontSize: 22, fontWeight: '800', color: colors.white, marginBottom: 4 },
+  email: { fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 10 },
   typeBadge: {
-    backgroundColor: colors.mintLight,
-    borderRadius: radius.full,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    marginBottom: 16,
+    backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: radius.full,
+    paddingHorizontal: 14, paddingVertical: 5, marginBottom: 16,
   },
-  typeText: { fontSize: 12, fontWeight: '700', color: colors.mintDark },
+  typeText: { fontSize: 12, fontWeight: '700', color: colors.white },
   editBtn: {
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
+    backgroundColor: colors.white, borderRadius: radius.md,
+    paddingHorizontal: 24, paddingVertical: 10,
   },
-  editBtnText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  statsRow: {
-    flexDirection: 'row',
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.md,
-    borderRadius: radius.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  stat: { flex: 1, alignItems: 'center', paddingVertical: 16 },
-  statBorder: { borderRightWidth: 1, borderRightColor: colors.border },
-  statValue: { fontSize: 22, fontWeight: '800', color: colors.textPrimary },
-  statLabel: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  supplierCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.mintDark,
-    marginHorizontal: spacing.md,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  ctaTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.white,
-    marginBottom: 4,
-  },
-  ctaSub: { fontSize: 12, color: 'rgba(255,255,255,0.8)', maxWidth: 250 },
-  ctaArrow: { fontSize: 24, color: colors.white, marginLeft: 'auto' },
-  menu: {
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.md,
-    borderRadius: radius.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+  editBtnText: { fontSize: 13, fontWeight: '700', color: colors.mint },
+  menuCard: {
+    backgroundColor: colors.white, marginHorizontal: spacing.md,
+    marginTop: spacing.md, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.border,
     overflow: 'hidden',
   },
   menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.md, paddingVertical: 14,
   },
-  menuBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
-  menuIcon: { fontSize: 20, width: 36 },
-  menuContent: { flex: 1 },
+  menuRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  menuIcon: {
+    width: 36, height: 36, borderRadius: radius.md,
+    backgroundColor: colors.mintLight, alignItems: 'center', justifyContent: 'center',
+    marginRight: 12,
+  },
+  menuIconText: { fontSize: 18 },
+  menuText: { flex: 1 },
   menuLabel: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
   menuSub: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
-  menuArrow: { fontSize: 22, color: colors.textMuted, fontWeight: '300' },
+  menuChevron: { fontSize: 22, color: colors.textMuted, fontWeight: '300' },
   signOutBtn: {
-    marginHorizontal: spacing.md,
-    borderRadius: radius.lg,
-    paddingVertical: 16,
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    borderWidth: 1.5,
-    borderColor: '#fee2e2',
-    marginBottom: spacing.sm,
+    marginHorizontal: spacing.md, marginTop: spacing.md,
+    borderRadius: radius.lg, paddingVertical: 14,
+    borderWidth: 1.5, borderColor: colors.error, alignItems: 'center',
   },
   signOutText: { fontSize: 15, fontWeight: '700', color: colors.error },
-  version: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: colors.textMuted,
-    marginBottom: 8,
-  },
+  version: { textAlign: 'center', marginTop: 16, fontSize: 12, color: colors.textMuted },
 });
