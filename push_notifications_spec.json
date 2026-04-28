@@ -1,17 +1,25 @@
 {
   "_meta": {
     "document": "PPF Mobile — Push Notification Specification",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "created": "2026-04-27",
+    "updated": "2026-04-27",
     "status": "implementation-ready",
-    "description": "Authoritative reference for every push notification type in the PPF app. Defines the payload shape, the Supabase trigger/edge function that fires it, and the in-app deep-link target (tab + context) that the mobile app navigates to on tap.",
+    "description": "Authoritative reference for every push notification type in the PPF app. Uses Supabase + direct APNs/FCM — NO Firebase SDK on the device. Defines the payload shape, the Supabase edge function that fires it, and the in-app deep-link target (tab + context) that the mobile app navigates to on tap.",
+
     "implementation_stack": {
-      "provider": "Expo Notifications (via @notifee/react-native or @react-native-firebase/messaging)",
-      "apns_key_type": "APNs Authentication Key (.p8) — preferred over certificate",
-      "fcm": "Firebase Cloud Messaging (Android)",
-      "server_side": "Supabase Edge Functions → Supabase pg_net / fetch → FCM & APNs HTTP/2",
+      "NO_firebase": "Firebase SDK is NOT used anywhere in this project. Do not add @react-native-firebase.",
+      "auth_and_db": "Supabase Auth + Supabase PostgREST (already in place)",
+      "device_library": "@notifee/react-native — handles notification display, channels, badges, foreground notifications, tap events. Works with raw APNs/FCM tokens.",
+      "ios_token": "PushNotificationIOS (React Native built-in) or Notifee.requestPermission() → returns raw APNs device token",
+      "android_token": "FCM HTTP v1 API still required for Android delivery — but called SERVER-SIDE only from Supabase edge functions. The mobile app gets an FCM registration token via @react-native-community/push-notification-ios on iOS and react-native built-ins on Android (without the full Firebase SDK, use the lightweight @react-native-firebase/messaging standalone module OR use Notifee which supports direct token registration).",
+      "recommended_mobile_setup": "@notifee/react-native (display) + react-native PushNotificationIOS (iOS APNs token registration) + react-native VapidPush / direct FCM token on Android",
+      "server_side_delivery": {
+        "ios": "Supabase Edge Function → APNs HTTP/2 API directly using JWT (ES256) signed with the .p8 key. No Firebase involved.",
+        "android": "Supabase Edge Function → FCM HTTP v1 API (https://fcm.googleapis.com/v1/projects/{project}/messages:send) using a Google service account JWT. This is a direct Google API call — no Firebase SDK on the device."
+      },
       "token_storage_table": "profiles.push_token (text), profiles.push_platform ('ios' | 'android')",
-      "badge_source": "Supabase Realtime subscription on messages table, unread_count RPC"
+      "badge_source": "Supabase Realtime subscription on messages table + get_unread_count RPC"
     }
   },
 
@@ -488,31 +496,38 @@
   ],
 
   "push_token_registration": {
-    "description": "How the mobile app registers and stores push tokens",
+    "description": "How the mobile app registers device tokens and stores them in Supabase — no Firebase SDK involved.",
+    "library": "@notifee/react-native + PushNotificationIOS (built into React Native)",
     "flow": [
-      "1. On app launch (AuthContext mounted), call requestPermission() from @react-native-firebase/messaging",
-      "2. On grant, call messaging().getToken() → FCM token (iOS gets APNs token via FCM bridge)",
-      "3. PATCH profiles SET push_token = <token>, push_platform = 'ios'|'android' WHERE id = user.id",
-      "4. Listen to messaging().onTokenRefresh() and re-PATCH when token rotates",
-      "5. On signOut, PATCH profiles SET push_token = null"
+      "1. On login (AuthContext user set), call notifee.requestPermission()",
+      "2. iOS: listen to PushNotificationIOS.addEventListener('register', token => ...) to get the raw APNs device token (hex string)",
+      "3. Android: call messaging().getToken() from the lightweight standalone @react-native-firebase/messaging (OR use Notifee's FCM token helper — this is NOT the full Firebase SDK, just the FCM token fetcher)",
+      "4. PATCH profiles SET push_token = <token>, push_platform = 'ios'|'android' WHERE id = user.id (using existing restPatch from restClient.ts)",
+      "5. iOS: also listen to PushNotificationIOS.addEventListener('registrationError') for token failures",
+      "6. Re-register on every app foreground (tokens can rotate silently on iOS)",
+      "7. On signOut: PATCH profiles SET push_token = null, push_platform = null"
     ],
+    "ios_entitlement_required": "aps-environment (development | production) — set in Xcode Signing & Capabilities → Push Notifications",
     "db_columns_needed": [
       "profiles.push_token TEXT",
       "profiles.push_platform TEXT CHECK (push_platform IN ('ios', 'android'))",
       "profiles.push_enabled BOOLEAN DEFAULT true",
       "profiles.allow_feed_notifications BOOLEAN DEFAULT true",
       "profiles.last_low_token_notified_at TIMESTAMPTZ"
-    ]
+    ],
+    "implementation_file": "PPFMobile/src/hooks/usePushNotifications.ts (TO CREATE)"
   },
 
   "in_app_notification_handler": {
-    "description": "How App.tsx handles incoming notification taps to navigate to the right screen",
-    "library": "@react-native-firebase/messaging",
+    "description": "How App.tsx handles notification taps to navigate to the right screen — all handled via @notifee, no Firebase",
+    "library": "@notifee/react-native",
     "implementation_file": "PPFMobile/src/hooks/usePushNotifications.ts (TO CREATE)",
     "logic": {
-      "background_tap": "messaging().onNotificationOpenedApp(remoteMessage => handleNotificationTap(remoteMessage.data))",
-      "killed_state_tap": "messaging().getInitialNotification() → handleNotificationTap on first render",
-      "foreground": "messaging().onMessage() → show in-app banner (do NOT show OS alert when app is foregrounded)",
+      "background_tap": "notifee.onBackgroundEvent(async ({ type, detail }) => { if (type === EventType.PRESS) handleNotificationTap(detail.notification.data) })",
+      "foreground_tap": "useEffect(() => notifee.onForegroundEvent(({ type, detail }) => { if (type === EventType.PRESS) handleNotificationTap(detail.notification.data) }), [])",
+      "killed_state_tap": "notifee.getInitialNotification() → handleNotificationTap on mount if present",
+      "foreground_display": "When app is open, DO NOT show OS alert for new_message if that conversation is already open. Otherwise show an in-app banner via notifee.displayNotification() with a custom Android channel.",
+      "supabase_realtime_fallback": "For foreground message badge updates, use Supabase Realtime channel subscription on messages table (recipient_id=eq.{userId}) — no push needed when app is open.",
       "handler_map": {
         "new_message":               "setActiveTab('Messages'); setOpenConversationId(data.conversation_id)",
         "new_quote_request":         "setActiveTab('Messages'); setOpenConversationId(data.conversation_id)",
@@ -532,85 +547,146 @@
     "description": "How the app badge count (red dot on home screen icon) is managed",
     "sources_of_badge_increment": ["new_message", "new_quote_request", "new_order_received"],
     "clear_on": {
-      "Messages tab open": "Clear all message badges",
+      "Messages tab open": "notifee.setBadgeCount(0) + mark messages as read via Supabase",
       "Specific conversation open": "Decrement badge by that conversation's unread count",
-      "Orders tab open": "Clear order badges"
+      "Orders tab open": "Clear order-related badge portion"
     },
-    "server_sync": "GET /rpc/get_unread_count → returns { messages: N, orders: N, total: N }. Called on app foreground.",
-    "tab_bar_badge": "TabBar component receives unreadMessages prop (currently hardcoded 0 in App.tsx line 55 — needs wiring)"
+    "server_sync": "Call Supabase RPC get_unread_count on app foreground → returns { messages: N, orders: N, total: N } → notifee.setBadgeCount(total)",
+    "tab_bar_badge": "TabBar receives unreadMessages prop (currently hardcoded 0 in App.tsx line 55 — wire to unreadCount state from usePushNotifications hook)"
+  },
+
+  "server_side_delivery": {
+    "description": "How Supabase edge functions send notifications directly to APNs and FCM — no Firebase SDK, no Firebase console",
+    "ios_apns": {
+      "endpoint": "https://api.push.apple.com/3/device/{device_token}  (production)  |  https://api.sandbox.push.apple.com/3/device/{device_token}  (dev)",
+      "auth": "JWT signed with ES256 using the .p8 private key. Header: { alg: 'ES256', kid: APNS_KEY_ID }. Claims: { iss: APNS_TEAM_ID, iat: now }. Token is reused for up to 59 minutes.",
+      "required_headers": {
+        "authorization": "bearer <jwt>",
+        "apns-topic": "com.ppf.mobile  (your bundle ID)",
+        "apns-push-type": "alert | background",
+        "apns-priority": "10 (alert) | 5 (background)",
+        "content-type": "application/json"
+      },
+      "deno_helper": "supabase/functions/_shared/apns.ts — signs JWT with Deno crypto.subtle, sends fetch to APNs HTTP/2 endpoint"
+    },
+    "android_fcm": {
+      "endpoint": "https://fcm.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}/messages:send",
+      "auth": "OAuth2 access token from Google service account JWT (NOT the old FCM server key — v1 API requires OAuth2). Sign a JWT with the service account private key, exchange for access token.",
+      "note": "You need a Firebase project ONLY to get FCM credentials for Android delivery. No Firebase SDK goes on the device. The service account JSON is stored as a Supabase secret.",
+      "deno_helper": "supabase/functions/_shared/fcm.ts — generates Google OAuth2 token and POSTs to FCM v1 API"
+    },
+    "shared_send_function": "supabase/functions/_shared/sendPush.ts — takes { token, platform, title, body, data } → routes to apns.ts or fcm.ts based on platform"
   },
 
   "edge_functions_to_create": [
     {
+      "name": "_shared/apns.ts",
+      "description": "Shared helper: signs APNs JWT with ES256, sends notification to APNs HTTP/2 API",
+      "no_firebase": true
+    },
+    {
+      "name": "_shared/fcm.ts",
+      "description": "Shared helper: exchanges Google service account JWT for OAuth2 access token, POSTs to FCM v1 API",
+      "no_firebase": true
+    },
+    {
+      "name": "_shared/sendPush.ts",
+      "description": "Routes { token, platform, title, body, data } to apns.ts or fcm.ts",
+      "no_firebase": true
+    },
+    {
       "name": "notify-new-message",
       "file": "supabase/functions/notify-new-message/index.ts",
-      "trigger": "pg_net webhook on messages INSERT",
+      "trigger": "Supabase Database Webhook on messages INSERT",
       "sends": ["new_message", "new_quote_request"],
       "reads": ["messages", "profiles (push_token, push_platform)", "conversations"]
     },
     {
       "name": "notify-order-status",
       "file": "supabase/functions/notify-order-status/index.ts",
-      "trigger": "pg_net webhook on product_orders INSERT + UPDATE(status)",
+      "trigger": "Supabase Database Webhook on product_orders INSERT + UPDATE",
       "sends": ["new_order_received", "order_status_update"],
       "reads": ["product_orders", "products", "profiles"]
     },
     {
       "name": "notify-social",
       "file": "supabase/functions/notify-social/index.ts",
-      "trigger": "pg_net webhook on friendships INSERT + UPDATE(status)",
+      "trigger": "Supabase Database Webhook on friendships INSERT + UPDATE",
       "sends": ["connection_request", "connection_accepted"],
       "reads": ["friendships", "profiles"]
     },
     {
       "name": "notify-feed-post",
       "file": "supabase/functions/notify-feed-post/index.ts",
-      "trigger": "pg_net webhook on feed_posts INSERT",
+      "trigger": "Supabase Database Webhook on feed_posts INSERT",
       "sends": ["new_feed_post"],
-      "reads": ["feed_posts", "friendships (to get follower list)", "profiles"]
+      "reads": ["feed_posts", "friendships (follower list)", "profiles"]
     },
     {
       "name": "notify-account",
       "file": "supabase/functions/notify-account/index.ts",
-      "trigger": "pg_net webhook on profiles UPDATE(token_balance)",
-      "sends": ["low_token_balance", "token_purchase_confirmed (also called directly from stripe-webhook)"],
+      "trigger": "Supabase Database Webhook on profiles UPDATE(token_balance)",
+      "sends": ["low_token_balance", "token_purchase_confirmed"],
       "reads": ["profiles"]
     },
     {
       "name": "notify-marketplace",
       "file": "supabase/functions/notify-marketplace/index.ts",
-      "trigger": "pg_net webhook on products UPDATE(price)",
+      "trigger": "Supabase Database Webhook on products UPDATE(price)",
       "sends": ["product_price_drop"],
-      "reads": ["products", "saved_products (join table)", "profiles"]
+      "reads": ["products", "saved_products", "profiles"]
     }
   ],
 
   "secrets_required": {
-    "supabase_secrets": [
-      "FCM_SERVER_KEY — Firebase Cloud Messaging server key (from Firebase console)",
-      "APNS_KEY_ID — 10-char APNs key ID from Apple Developer",
-      "APNS_TEAM_ID — 10-char Apple Team ID",
-      "APNS_PRIVATE_KEY — contents of .p8 file (newlines as \\n)"
-    ],
-    "mobile_env": [
-      "GOOGLE_SERVICES_JSON_BASE64 — for CI/CD Android",
-      "GOOGLE_SERVICES_PLIST_BASE64 — for CI/CD iOS"
+    "description": "All stored via `supabase secrets set KEY=value` — nothing in .env files",
+    "supabase_secrets": {
+      "APNS_KEY_ID":        "10-char key ID from Apple Developer Portal (e.g. ABC1234567)",
+      "APNS_TEAM_ID":       "10-char Apple Team ID from developer.apple.com top-right",
+      "APNS_PRIVATE_KEY":   "Full contents of the .p8 file with newlines as \\n  — NEVER commit this file",
+      "APNS_BUNDLE_ID":     "Your iOS bundle ID e.g. com.ppf.mobile",
+      "FCM_PROJECT_ID":     "Firebase project ID (for FCM v1 API endpoint path only — no SDK on device)",
+      "FCM_SERVICE_ACCOUNT_JSON": "Full Google service account JSON as a single-line string — used to get OAuth2 token for FCM v1 API"
+    },
+    "NOT_needed": [
+      "No GoogleService-Info.plist on iOS",
+      "No google-services.json on Android",
+      "No @react-native-firebase/* packages",
+      "No Firebase SDK initialization in App.tsx"
     ]
   },
 
   "apns_setup_checklist": [
-    "[ ] In Apple Developer Portal → Certificates, IDs & Profiles → Keys → Create APNs Auth Key (.p8)",
-    "[ ] Download key — it can only be downloaded ONCE. Store securely.",
-    "[ ] Note Key ID (10 chars) and Team ID (top-right of developer.apple.com)",
-    "[ ] In Firebase console → Project Settings → Cloud Messaging → iOS app → Upload APNs Auth Key",
-    "[ ] Set bundle ID in Xcode to production ID (currently org.reactjs.native.example.PPFMobile — change to com.ppf.mobile or your chosen ID)",
-    "[ ] Enable Push Notifications capability in Xcode → Signing & Capabilities",
-    "[ ] Enable Background Modes → Remote notifications in Xcode"
+    "[ ] Apple Developer Portal → Certificates, IDs & Profiles → Keys → + → enable Apple Push Notifications service (APNs)",
+    "[ ] Download the .p8 key file — CAN ONLY BE DOWNLOADED ONCE. Store in 1Password/vault immediately.",
+    "[ ] Note Key ID (10 chars shown after creation) and Team ID (top-right corner of developer.apple.com)",
+    "[ ] In Xcode: change bundle ID from org.reactjs.native.example.PPFMobile to your production ID (e.g. com.ppf.mobile)",
+    "[ ] In Xcode: Signing & Capabilities → + Capability → Push Notifications",
+    "[ ] In Xcode: Signing & Capabilities → + Capability → Background Modes → check 'Remote notifications'",
+    "[ ] Run: supabase secrets set APNS_KEY_ID=XXXXXXXXXX APNS_TEAM_ID=XXXXXXXXXX APNS_BUNDLE_ID=com.ppf.mobile",
+    "[ ] Run: supabase secrets set APNS_PRIVATE_KEY=\"$(cat AuthKey_XXXXXXXXXX.p8 | tr '\\n' '|' | sed 's/|/\\\\n/g')\"",
+    "[ ] For Android FCM: create Firebase project (push delivery only — no SDK on device), create service account, download JSON",
+    "[ ] Run: supabase secrets set FCM_PROJECT_ID=your-project-id FCM_SERVICE_ACCOUNT_JSON='<json string>'"
   ],
 
+  "database_webhooks_setup": {
+    "description": "How to connect Supabase DB events to edge functions — done in Supabase Dashboard → Database → Webhooks",
+    "webhooks": [
+      { "name": "on_new_message",     "table": "messages",       "events": ["INSERT"],          "function_url": "https://{project}.supabase.co/functions/v1/notify-new-message" },
+      { "name": "on_order_change",    "table": "product_orders", "events": ["INSERT","UPDATE"],  "function_url": "https://{project}.supabase.co/functions/v1/notify-order-status" },
+      { "name": "on_friendship",      "table": "friendships",    "events": ["INSERT","UPDATE"],  "function_url": "https://{project}.supabase.co/functions/v1/notify-social" },
+      { "name": "on_feed_post",       "table": "feed_posts",     "events": ["INSERT"],           "function_url": "https://{project}.supabase.co/functions/v1/notify-feed-post" },
+      { "name": "on_balance_change",  "table": "profiles",       "events": ["UPDATE"],           "function_url": "https://{project}.supabase.co/functions/v1/notify-account" },
+      { "name": "on_price_change",    "table": "products",       "events": ["UPDATE"],           "function_url": "https://{project}.supabase.co/functions/v1/notify-marketplace" }
+    ],
+    "authentication": "Each webhook call includes Authorization: Bearer {SUPABASE_SERVICE_ROLE_KEY} header — verify in edge function"
+  },
+
   "testing": {
-    "simulator": "APNs does not work on Simulator — use a real device for push testing",
-    "test_tool": "Use Firebase console → Cloud Messaging → Send test message using the device FCM token logged on app start",
-    "local_trigger": "Can manually POST to Supabase edge function with test payload to fire notification without a DB event"
+    "simulator": "APNs does NOT work on iOS Simulator — must use a real physical device for push testing",
+    "ios_sandbox": "Development builds use APNs sandbox endpoint: https://api.sandbox.push.apple.com. Set APNS_ENVIRONMENT=sandbox secret for dev, production for prod.",
+    "manual_test": "POST directly to the edge function with a test payload: curl -X POST https://{project}.supabase.co/functions/v1/notify-new-message -H 'Authorization: Bearer {service_role_key}' -d '{\"record\":{\"recipient_id\":\"USER_UUID\",\"content\":\"Test\"}}'",
+    "token_logging": "In usePushNotifications.ts, console.log the device token on registration so you can test-fire via curl",
+    "notifee_local_test": "notifee.displayNotification({ title: 'Test', body: 'Hello', data: { ppf_type: 'new_message', conversation_id: 'xxx' } }) — tests the tap handler without a real push"
   }
 }
