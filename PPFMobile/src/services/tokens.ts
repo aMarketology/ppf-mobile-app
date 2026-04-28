@@ -1,5 +1,5 @@
 // Raw fetch — no supabase-js client (hangs in iOS simulator)
-import { restGet, restRpc } from '../lib/restClient';
+import { restGet, restRpc, callEdgeFunction } from '../lib/restClient';
 
 export interface TokenPurchase {
   id: string;
@@ -58,4 +58,22 @@ export async function creditTokens(
     p_amount:            tokens,
     p_stripe_payment_id: stripePaymentId,
   }, jwt);
+}
+
+export interface PaymentIntentResult {
+  clientSecret:    string;
+  paymentIntentId: string;
+  amount:          number;
+  tokens:          number;
+}
+
+/**
+ * Call the purchase-tokens edge function to create a Stripe PaymentIntent.
+ * Returns the clientSecret needed to present the Stripe Payment Sheet.
+ */
+export async function createPaymentIntent(
+  packageId: string,
+  jwt: string,
+): Promise<PaymentIntentResult> {
+  return callEdgeFunction<PaymentIntentResult>('purchase-tokens', { packageId }, jwt);
 }

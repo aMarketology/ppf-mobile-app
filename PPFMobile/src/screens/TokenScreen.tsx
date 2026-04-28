@@ -3,9 +3,10 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, RefreshControl, Alert,
 } from 'react-native';
+import { useStripe } from '@stripe/stripe-react-native';
 import { useAuth } from '../context/AuthContext';
 import {
-  fetchTokenBalance, fetchPurchaseHistory, creditTokens,
+  fetchTokenBalance, fetchPurchaseHistory, createPaymentIntent,
   TOKEN_PACKAGES,
   type TokenPurchase, type TokenPackage,
 } from '../services/tokens';
@@ -15,6 +16,7 @@ type Props = { onBack: () => void };
 
 export default function TokenScreen({ onBack }: Props) {
   const { user, session } = useAuth();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const jwt = session?.access_token ?? '';
 
   const [balance,   setBalance]   = useState<number | null>(null);
@@ -46,29 +48,39 @@ export default function TokenScreen({ onBack }: Props) {
   useEffect(() => { load(); }, [load]);
 
   async function handleBuy(pkg: TokenPackage) {
-    if (buying) return;
-    Alert.alert(
-      `Buy ${pkg.tokens} Tokens`,
-      `$${(pkg.price / 100).toFixed(2)} — Stripe payment coming soon.\n\nFor now, tokens will be credited directly.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            setBuying(pkg.id);
-            try {
-              await creditTokens(user!.id, pkg.tokens, null, jwt);
-              await load(true);
-              Alert.alert('✅ Success', `${pkg.tokens} tokens added to your account!`);
-            } catch (e: any) {
-              Alert.alert('Error', e?.message ?? 'Purchase failed');
-            } finally {
-              setBuying(null);
-            }
-          },
-        },
-      ],
-    );
+    if (buying || !user) return;
+    setBuying(pkg.id);
+    try {
+      // 1. Create PaymentIntent via edge function
+      const { clientSecret } = await createPaymentIntent(pkg.id, jwt);
+
+      // 2. Initialize Stripe Payment Sheet
+      const { error: initError } = await initPaymentSheet({
+        merchantDisplayName: 'Precision Project Flow',
+        paymentIntentClientSecret: clientSecret,
+        defaultBillingDetails: { email: user.email },
+        returnURL: 'ppfmobile://stripe-redirect',
+      });
+      if (initError) throw new Error(initError.message);
+
+      // 3. Present Payment Sheet to user
+      const { error: presentError } = await presentPaymentSheet();
+      if (presentError) {
+        if (presentError.code !== 'Canceled') {
+          Alert.alert('Payment failed', presentError.message);
+        }
+        return;
+      }
+
+      // 4. Payment succeeded — webhook credits tokens server-side.
+      //    Reload balance after a short delay to let webhook process.
+      Alert.alert('✅ Payment successful!', `${pkg.tokens} tokens are being added to your account.`);
+      setTimeout(() => load(true), 2000);
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Purchase failed');
+    } finally {
+      setBuying(null);
+    }
   }
 
   const dollarStr = (cents: number) => `$${(cents / 100).toFixed(2)}`;
