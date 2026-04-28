@@ -1,0 +1,616 @@
+{
+  "_meta": {
+    "document": "PPF Mobile — Push Notification Specification",
+    "version": "1.0.0",
+    "created": "2026-04-27",
+    "status": "implementation-ready",
+    "description": "Authoritative reference for every push notification type in the PPF app. Defines the payload shape, the Supabase trigger/edge function that fires it, and the in-app deep-link target (tab + context) that the mobile app navigates to on tap.",
+    "implementation_stack": {
+      "provider": "Expo Notifications (via @notifee/react-native or @react-native-firebase/messaging)",
+      "apns_key_type": "APNs Authentication Key (.p8) — preferred over certificate",
+      "fcm": "Firebase Cloud Messaging (Android)",
+      "server_side": "Supabase Edge Functions → Supabase pg_net / fetch → FCM & APNs HTTP/2",
+      "token_storage_table": "profiles.push_token (text), profiles.push_platform ('ios' | 'android')",
+      "badge_source": "Supabase Realtime subscription on messages table, unread_count RPC"
+    }
+  },
+
+  "tab_routes": {
+    "description": "In-app navigation model — App.tsx activeTab switch. All deep-links set activeTab to one of these values.",
+    "routes": [
+      { "tab": "Home",        "component": "HomeScreen",        "notes": "Dashboard / quick stats" },
+      { "tab": "Marketplace", "component": "MarketplaceScreen", "notes": "Product listings, search" },
+      { "tab": "Orders",      "component": "OrdersScreen",      "notes": "Order history and status" },
+      { "tab": "Feed",        "component": "FeedScreen",        "notes": "Activity feed / social posts" },
+      { "tab": "Messages",    "component": "MessagesScreen",    "notes": "Conversation list. Passes openConversationId to drill into a thread" },
+      { "tab": "Profile",     "component": "ProfileScreen",     "notes": "User profile, settings, tokens" },
+      { "tab": "Tokens",      "component": "TokenScreen",       "notes": "Token balance & purchase — child of Profile" }
+    ]
+  },
+
+  "notification_types": [
+
+    {
+      "id": "new_message",
+      "category": "Messaging",
+      "display_name": "New Message",
+      "priority": "high",
+      "description": "Sent whenever another user sends a message in a conversation the recipient is part of.",
+      "trigger": {
+        "type": "database_webhook",
+        "table": "messages",
+        "event": "INSERT",
+        "supabase_function": "supabase/functions/notify-new-message/index.ts",
+        "condition": "recipient_id != sender_id AND recipient has push_token"
+      },
+      "apns_payload": {
+        "aps": {
+          "alert": {
+            "title": "{{sender_full_name}}",
+            "body": "{{message_preview_80_chars}}"
+          },
+          "badge": "{{recipient_unread_count}}",
+          "sound": "default",
+          "mutable-content": 1,
+          "category": "MESSAGE_CATEGORY"
+        },
+        "ppf_type": "new_message",
+        "conversation_id": "{{conversation_id}}",
+        "sender_id": "{{sender_user_id}}",
+        "sender_name": "{{sender_full_name}}"
+      },
+      "fcm_payload": {
+        "notification": {
+          "title": "{{sender_full_name}}",
+          "body": "{{message_preview_80_chars}}"
+        },
+        "data": {
+          "ppf_type": "new_message",
+          "conversation_id": "{{conversation_id}}",
+          "sender_id": "{{sender_user_id}}"
+        },
+        "android": { "priority": "high", "notification": { "channel_id": "messages" } }
+      },
+      "deep_link": {
+        "tab": "Messages",
+        "action": "open_conversation",
+        "params": { "conversationId": "{{conversation_id}}" },
+        "mobile_handler": "On notification tap → setActiveTab('Messages') + setOpenConversationId(conversationId)"
+      },
+      "badge_behavior": "Increment badge by 1. Clear when user opens that conversation.",
+      "in_app_suppression": "Do NOT fire OS notification if the user already has Messages tab active AND that conversation is open."
+    },
+
+    {
+      "id": "order_status_update",
+      "category": "Orders",
+      "display_name": "Order Status Change",
+      "priority": "high",
+      "description": "Fired when an order's status column changes (pending → confirmed → shipped → delivered → cancelled).",
+      "trigger": {
+        "type": "database_webhook",
+        "table": "product_orders",
+        "event": "UPDATE",
+        "column_filter": "status",
+        "supabase_function": "supabase/functions/notify-order-status/index.ts",
+        "condition": "order.buyer_id has push_token OR order.seller_id has push_token (role-specific copy)"
+      },
+      "status_copy": {
+        "pending":   { "title": "Order Received",   "body": "Your order #{{order_short_id}} has been received and is being reviewed." },
+        "confirmed": { "title": "Order Confirmed",  "body": "Great news — order #{{order_short_id}} is confirmed and being prepared." },
+        "shipped":   { "title": "Order Shipped 📦", "body": "Order #{{order_short_id}} is on its way!" },
+        "delivered": { "title": "Order Delivered ✅","body": "Order #{{order_short_id}} has been delivered. How did it go?" },
+        "cancelled": { "title": "Order Cancelled",  "body": "Order #{{order_short_id}} has been cancelled. Tap for details." }
+      },
+      "apns_payload": {
+        "aps": {
+          "alert": { "title": "{{status_title}}", "body": "{{status_body}}" },
+          "sound": "default",
+          "badge": "{{unread_count}}"
+        },
+        "ppf_type": "order_status_update",
+        "order_id": "{{order_id}}",
+        "new_status": "{{new_status}}"
+      },
+      "fcm_payload": {
+        "notification": { "title": "{{status_title}}", "body": "{{status_body}}" },
+        "data": { "ppf_type": "order_status_update", "order_id": "{{order_id}}", "new_status": "{{new_status}}" },
+        "android": { "priority": "high", "notification": { "channel_id": "orders" } }
+      },
+      "deep_link": {
+        "tab": "Orders",
+        "action": "scroll_to_order",
+        "params": { "orderId": "{{order_id}}" },
+        "mobile_handler": "On tap → setActiveTab('Orders') + setHighlightOrderId(orderId)"
+      },
+      "badge_behavior": "No badge increment (informational). Clear on Orders tab open."
+    },
+
+    {
+      "id": "new_order_received",
+      "category": "Orders",
+      "display_name": "New Order Received (Seller)",
+      "priority": "high",
+      "description": "Sent to the SELLER when a buyer places a new order on their product.",
+      "trigger": {
+        "type": "database_webhook",
+        "table": "product_orders",
+        "event": "INSERT",
+        "supabase_function": "supabase/functions/notify-order-status/index.ts",
+        "condition": "seller has push_token"
+      },
+      "apns_payload": {
+        "aps": {
+          "alert": {
+            "title": "New Order! 🎉",
+            "body": "{{buyer_full_name}} ordered {{product_name}} — {{quantity}} unit(s) for {{total_formatted}}"
+          },
+          "sound": "default",
+          "badge": "{{unread_count}}"
+        },
+        "ppf_type": "new_order_received",
+        "order_id": "{{order_id}}"
+      },
+      "fcm_payload": {
+        "notification": {
+          "title": "New Order! 🎉",
+          "body": "{{buyer_full_name}} ordered {{product_name}}"
+        },
+        "data": { "ppf_type": "new_order_received", "order_id": "{{order_id}}" },
+        "android": { "priority": "high", "notification": { "channel_id": "orders" } }
+      },
+      "deep_link": {
+        "tab": "Orders",
+        "action": "scroll_to_order",
+        "params": { "orderId": "{{order_id}}" },
+        "mobile_handler": "On tap → setActiveTab('Orders') + setHighlightOrderId(orderId)"
+      },
+      "badge_behavior": "Increment seller badge by 1."
+    },
+
+    {
+      "id": "token_purchase_confirmed",
+      "category": "Tokens",
+      "display_name": "Token Purchase Confirmed",
+      "priority": "normal",
+      "description": "Fired by the stripe-webhook edge function after payment_intent.succeeded credits tokens to the user's account.",
+      "trigger": {
+        "type": "edge_function_direct",
+        "supabase_function": "supabase/functions/stripe-webhook/index.ts",
+        "event": "After successful add_tokens RPC call"
+      },
+      "apns_payload": {
+        "aps": {
+          "alert": {
+            "title": "Tokens Added ✅",
+            "body": "{{token_count}} tokens have been added to your account. New balance: {{new_balance}}."
+          },
+          "sound": "default"
+        },
+        "ppf_type": "token_purchase_confirmed",
+        "tokens_added": "{{token_count}}",
+        "new_balance": "{{new_balance}}"
+      },
+      "fcm_payload": {
+        "notification": {
+          "title": "Tokens Added ✅",
+          "body": "{{token_count}} tokens added. Balance: {{new_balance}}"
+        },
+        "data": { "ppf_type": "token_purchase_confirmed", "tokens_added": "{{token_count}}" },
+        "android": { "priority": "normal", "notification": { "channel_id": "account" } }
+      },
+      "deep_link": {
+        "tab": "Tokens",
+        "action": "none",
+        "mobile_handler": "On tap → setActiveTab('Profile') then setActiveTab('Tokens')"
+      },
+      "badge_behavior": "No badge."
+    },
+
+    {
+      "id": "new_quote_request",
+      "category": "Messaging",
+      "display_name": "New Quote Request",
+      "priority": "high",
+      "description": "When a buyer taps 'Request Quote' on a product and sends a message to the seller, fire this higher-intent variant instead of new_message.",
+      "trigger": {
+        "type": "database_webhook",
+        "table": "messages",
+        "event": "INSERT",
+        "supabase_function": "supabase/functions/notify-new-message/index.ts",
+        "condition": "message.metadata->>'type' = 'quote_request'"
+      },
+      "apns_payload": {
+        "aps": {
+          "alert": {
+            "title": "Quote Request 📋",
+            "body": "{{buyer_full_name}} is requesting a quote for {{product_name}}"
+          },
+          "sound": "default",
+          "badge": "{{recipient_unread_count}}"
+        },
+        "ppf_type": "new_quote_request",
+        "conversation_id": "{{conversation_id}}",
+        "product_id": "{{product_id}}"
+      },
+      "fcm_payload": {
+        "notification": {
+          "title": "Quote Request 📋",
+          "body": "{{buyer_full_name}} wants a quote for {{product_name}}"
+        },
+        "data": { "ppf_type": "new_quote_request", "conversation_id": "{{conversation_id}}", "product_id": "{{product_id}}" },
+        "android": { "priority": "high", "notification": { "channel_id": "messages" } }
+      },
+      "deep_link": {
+        "tab": "Messages",
+        "action": "open_conversation",
+        "params": { "conversationId": "{{conversation_id}}" },
+        "mobile_handler": "On tap → setActiveTab('Messages') + setOpenConversationId(conversationId)"
+      },
+      "badge_behavior": "Increment badge by 1. Clear when conversation is opened."
+    },
+
+    {
+      "id": "new_feed_post",
+      "category": "Feed",
+      "display_name": "New Feed Post from Connection",
+      "priority": "normal",
+      "description": "When a user the recipient follows/is connected with posts to the feed.",
+      "trigger": {
+        "type": "database_webhook",
+        "table": "feed_posts",
+        "event": "INSERT",
+        "supabase_function": "supabase/functions/notify-feed-post/index.ts",
+        "condition": "Fan-out to all followers of author who have push_token and allow_feed_notifications=true"
+      },
+      "apns_payload": {
+        "aps": {
+          "alert": {
+            "title": "{{author_full_name}} posted",
+            "body": "{{post_preview_100_chars}}"
+          },
+          "sound": "default"
+        },
+        "ppf_type": "new_feed_post",
+        "post_id": "{{post_id}}",
+        "author_id": "{{author_id}}"
+      },
+      "fcm_payload": {
+        "notification": {
+          "title": "{{author_full_name}} posted",
+          "body": "{{post_preview_100_chars}}"
+        },
+        "data": { "ppf_type": "new_feed_post", "post_id": "{{post_id}}" },
+        "android": { "priority": "normal", "notification": { "channel_id": "feed" } }
+      },
+      "deep_link": {
+        "tab": "Feed",
+        "action": "scroll_to_post",
+        "params": { "postId": "{{post_id}}" },
+        "mobile_handler": "On tap → setActiveTab('Feed') + setHighlightPostId(postId)"
+      },
+      "badge_behavior": "No badge (feed is ambient).",
+      "user_setting": "profiles.allow_feed_notifications (boolean, default true)"
+    },
+
+    {
+      "id": "connection_request",
+      "category": "Social",
+      "display_name": "New Connection Request",
+      "priority": "normal",
+      "description": "When another user sends a friend/connection request.",
+      "trigger": {
+        "type": "database_webhook",
+        "table": "friendships",
+        "event": "INSERT",
+        "supabase_function": "supabase/functions/notify-social/index.ts",
+        "condition": "status = 'pending'"
+      },
+      "apns_payload": {
+        "aps": {
+          "alert": {
+            "title": "Connection Request",
+            "body": "{{requester_full_name}} wants to connect with you on PPF"
+          },
+          "sound": "default"
+        },
+        "ppf_type": "connection_request",
+        "requester_id": "{{requester_id}}"
+      },
+      "fcm_payload": {
+        "notification": {
+          "title": "Connection Request",
+          "body": "{{requester_full_name}} wants to connect"
+        },
+        "data": { "ppf_type": "connection_request", "requester_id": "{{requester_id}}" },
+        "android": { "priority": "normal", "notification": { "channel_id": "social" } }
+      },
+      "deep_link": {
+        "tab": "Profile",
+        "action": "open_connections_tab",
+        "params": {},
+        "mobile_handler": "On tap → setActiveTab('Profile') + scroll to pending requests section"
+      },
+      "badge_behavior": "No badge."
+    },
+
+    {
+      "id": "connection_accepted",
+      "category": "Social",
+      "display_name": "Connection Accepted",
+      "priority": "normal",
+      "description": "When the other user accepts a pending connection request.",
+      "trigger": {
+        "type": "database_webhook",
+        "table": "friendships",
+        "event": "UPDATE",
+        "column_filter": "status",
+        "supabase_function": "supabase/functions/notify-social/index.ts",
+        "condition": "new status = 'accepted'"
+      },
+      "apns_payload": {
+        "aps": {
+          "alert": {
+            "title": "You're Connected! 🤝",
+            "body": "{{acceptor_full_name}} accepted your connection request"
+          },
+          "sound": "default"
+        },
+        "ppf_type": "connection_accepted",
+        "acceptor_id": "{{acceptor_id}}"
+      },
+      "fcm_payload": {
+        "notification": {
+          "title": "You're Connected! 🤝",
+          "body": "{{acceptor_full_name}} accepted your request"
+        },
+        "data": { "ppf_type": "connection_accepted", "acceptor_id": "{{acceptor_id}}" },
+        "android": { "priority": "normal", "notification": { "channel_id": "social" } }
+      },
+      "deep_link": {
+        "tab": "Messages",
+        "action": "open_new_conversation_with",
+        "params": { "userId": "{{acceptor_id}}" },
+        "mobile_handler": "On tap → setActiveTab('Messages') (suggested: send them a first message)"
+      },
+      "badge_behavior": "No badge."
+    },
+
+    {
+      "id": "low_token_balance",
+      "category": "Account",
+      "display_name": "Low Token Balance Warning",
+      "priority": "normal",
+      "description": "Fired when a user's token balance drops below 5 after a spend event.",
+      "trigger": {
+        "type": "database_webhook",
+        "table": "profiles",
+        "event": "UPDATE",
+        "column_filter": "token_balance",
+        "supabase_function": "supabase/functions/notify-account/index.ts",
+        "condition": "new.token_balance < 5 AND old.token_balance >= 5"
+      },
+      "apns_payload": {
+        "aps": {
+          "alert": {
+            "title": "Running Low on Tokens",
+            "body": "You have {{token_balance}} tokens left. Top up to keep searching and messaging."
+          },
+          "sound": "default"
+        },
+        "ppf_type": "low_token_balance",
+        "current_balance": "{{token_balance}}"
+      },
+      "fcm_payload": {
+        "notification": {
+          "title": "Running Low on Tokens",
+          "body": "Only {{token_balance}} tokens left — top up now"
+        },
+        "data": { "ppf_type": "low_token_balance", "current_balance": "{{token_balance}}" },
+        "android": { "priority": "normal", "notification": { "channel_id": "account" } }
+      },
+      "deep_link": {
+        "tab": "Tokens",
+        "action": "none",
+        "mobile_handler": "On tap → setActiveTab('Profile') then setActiveTab('Tokens')"
+      },
+      "badge_behavior": "No badge.",
+      "rate_limit": "Max 1 per user per 7 days — store last_low_token_notified_at on profiles"
+    },
+
+    {
+      "id": "product_price_drop",
+      "category": "Marketplace",
+      "display_name": "Price Drop on Watched Product",
+      "priority": "normal",
+      "description": "When a product the user has saved/favorited has its price reduced.",
+      "trigger": {
+        "type": "database_webhook",
+        "table": "products",
+        "event": "UPDATE",
+        "column_filter": "price",
+        "supabase_function": "supabase/functions/notify-marketplace/index.ts",
+        "condition": "new.price < old.price AND product is in at least one user's saved list"
+      },
+      "apns_payload": {
+        "aps": {
+          "alert": {
+            "title": "Price Drop 🔥",
+            "body": "{{product_name}} dropped from {{old_price}} to {{new_price}}"
+          },
+          "sound": "default"
+        },
+        "ppf_type": "product_price_drop",
+        "product_id": "{{product_id}}",
+        "new_price": "{{new_price}}"
+      },
+      "fcm_payload": {
+        "notification": {
+          "title": "Price Drop 🔥",
+          "body": "{{product_name}}: {{old_price}} → {{new_price}}"
+        },
+        "data": { "ppf_type": "product_price_drop", "product_id": "{{product_id}}" },
+        "android": { "priority": "normal", "notification": { "channel_id": "marketplace" } }
+      },
+      "deep_link": {
+        "tab": "Marketplace",
+        "action": "open_product",
+        "params": { "productId": "{{product_id}}" },
+        "mobile_handler": "On tap → setActiveTab('Marketplace') + setHighlightProductId(productId)"
+      },
+      "badge_behavior": "No badge."
+    }
+  ],
+
+  "android_notification_channels": [
+    { "id": "messages",    "name": "Messages",    "importance": "high",   "description": "New messages and quote requests" },
+    { "id": "orders",      "name": "Orders",      "importance": "high",   "description": "Order status updates and new orders" },
+    { "id": "account",     "name": "Account",     "importance": "default","description": "Token purchases and account alerts" },
+    { "id": "feed",        "name": "Feed",        "importance": "low",    "description": "Posts from connections" },
+    { "id": "social",      "name": "Connections", "importance": "default","description": "Connection requests and acceptances" },
+    { "id": "marketplace", "name": "Marketplace", "importance": "low",    "description": "Price drops and product alerts" }
+  ],
+
+  "ios_apns_categories": [
+    {
+      "id": "MESSAGE_CATEGORY",
+      "actions": [
+        { "id": "REPLY_ACTION",    "title": "Reply",    "options": ["authenticationRequired"], "textInput": { "buttonTitle": "Send", "placeholder": "Message..." } },
+        { "id": "MARK_READ_ACTION","title": "Mark Read","options": [] }
+      ]
+    },
+    {
+      "id": "ORDER_CATEGORY",
+      "actions": [
+        { "id": "VIEW_ORDER_ACTION", "title": "View Order", "options": [] }
+      ]
+    }
+  ],
+
+  "push_token_registration": {
+    "description": "How the mobile app registers and stores push tokens",
+    "flow": [
+      "1. On app launch (AuthContext mounted), call requestPermission() from @react-native-firebase/messaging",
+      "2. On grant, call messaging().getToken() → FCM token (iOS gets APNs token via FCM bridge)",
+      "3. PATCH profiles SET push_token = <token>, push_platform = 'ios'|'android' WHERE id = user.id",
+      "4. Listen to messaging().onTokenRefresh() and re-PATCH when token rotates",
+      "5. On signOut, PATCH profiles SET push_token = null"
+    ],
+    "db_columns_needed": [
+      "profiles.push_token TEXT",
+      "profiles.push_platform TEXT CHECK (push_platform IN ('ios', 'android'))",
+      "profiles.push_enabled BOOLEAN DEFAULT true",
+      "profiles.allow_feed_notifications BOOLEAN DEFAULT true",
+      "profiles.last_low_token_notified_at TIMESTAMPTZ"
+    ]
+  },
+
+  "in_app_notification_handler": {
+    "description": "How App.tsx handles incoming notification taps to navigate to the right screen",
+    "library": "@react-native-firebase/messaging",
+    "implementation_file": "PPFMobile/src/hooks/usePushNotifications.ts (TO CREATE)",
+    "logic": {
+      "background_tap": "messaging().onNotificationOpenedApp(remoteMessage => handleNotificationTap(remoteMessage.data))",
+      "killed_state_tap": "messaging().getInitialNotification() → handleNotificationTap on first render",
+      "foreground": "messaging().onMessage() → show in-app banner (do NOT show OS alert when app is foregrounded)",
+      "handler_map": {
+        "new_message":               "setActiveTab('Messages'); setOpenConversationId(data.conversation_id)",
+        "new_quote_request":         "setActiveTab('Messages'); setOpenConversationId(data.conversation_id)",
+        "order_status_update":       "setActiveTab('Orders'); setHighlightOrderId(data.order_id)",
+        "new_order_received":        "setActiveTab('Orders'); setHighlightOrderId(data.order_id)",
+        "token_purchase_confirmed":  "setActiveTab('Profile'); then setActiveTab('Tokens')",
+        "new_feed_post":             "setActiveTab('Feed'); setHighlightPostId(data.post_id)",
+        "connection_request":        "setActiveTab('Profile')",
+        "connection_accepted":       "setActiveTab('Messages')",
+        "low_token_balance":         "setActiveTab('Profile'); then setActiveTab('Tokens')",
+        "product_price_drop":        "setActiveTab('Marketplace'); setHighlightProductId(data.product_id)"
+      }
+    }
+  },
+
+  "badge_management": {
+    "description": "How the app badge count (red dot on home screen icon) is managed",
+    "sources_of_badge_increment": ["new_message", "new_quote_request", "new_order_received"],
+    "clear_on": {
+      "Messages tab open": "Clear all message badges",
+      "Specific conversation open": "Decrement badge by that conversation's unread count",
+      "Orders tab open": "Clear order badges"
+    },
+    "server_sync": "GET /rpc/get_unread_count → returns { messages: N, orders: N, total: N }. Called on app foreground.",
+    "tab_bar_badge": "TabBar component receives unreadMessages prop (currently hardcoded 0 in App.tsx line 55 — needs wiring)"
+  },
+
+  "edge_functions_to_create": [
+    {
+      "name": "notify-new-message",
+      "file": "supabase/functions/notify-new-message/index.ts",
+      "trigger": "pg_net webhook on messages INSERT",
+      "sends": ["new_message", "new_quote_request"],
+      "reads": ["messages", "profiles (push_token, push_platform)", "conversations"]
+    },
+    {
+      "name": "notify-order-status",
+      "file": "supabase/functions/notify-order-status/index.ts",
+      "trigger": "pg_net webhook on product_orders INSERT + UPDATE(status)",
+      "sends": ["new_order_received", "order_status_update"],
+      "reads": ["product_orders", "products", "profiles"]
+    },
+    {
+      "name": "notify-social",
+      "file": "supabase/functions/notify-social/index.ts",
+      "trigger": "pg_net webhook on friendships INSERT + UPDATE(status)",
+      "sends": ["connection_request", "connection_accepted"],
+      "reads": ["friendships", "profiles"]
+    },
+    {
+      "name": "notify-feed-post",
+      "file": "supabase/functions/notify-feed-post/index.ts",
+      "trigger": "pg_net webhook on feed_posts INSERT",
+      "sends": ["new_feed_post"],
+      "reads": ["feed_posts", "friendships (to get follower list)", "profiles"]
+    },
+    {
+      "name": "notify-account",
+      "file": "supabase/functions/notify-account/index.ts",
+      "trigger": "pg_net webhook on profiles UPDATE(token_balance)",
+      "sends": ["low_token_balance", "token_purchase_confirmed (also called directly from stripe-webhook)"],
+      "reads": ["profiles"]
+    },
+    {
+      "name": "notify-marketplace",
+      "file": "supabase/functions/notify-marketplace/index.ts",
+      "trigger": "pg_net webhook on products UPDATE(price)",
+      "sends": ["product_price_drop"],
+      "reads": ["products", "saved_products (join table)", "profiles"]
+    }
+  ],
+
+  "secrets_required": {
+    "supabase_secrets": [
+      "FCM_SERVER_KEY — Firebase Cloud Messaging server key (from Firebase console)",
+      "APNS_KEY_ID — 10-char APNs key ID from Apple Developer",
+      "APNS_TEAM_ID — 10-char Apple Team ID",
+      "APNS_PRIVATE_KEY — contents of .p8 file (newlines as \\n)"
+    ],
+    "mobile_env": [
+      "GOOGLE_SERVICES_JSON_BASE64 — for CI/CD Android",
+      "GOOGLE_SERVICES_PLIST_BASE64 — for CI/CD iOS"
+    ]
+  },
+
+  "apns_setup_checklist": [
+    "[ ] In Apple Developer Portal → Certificates, IDs & Profiles → Keys → Create APNs Auth Key (.p8)",
+    "[ ] Download key — it can only be downloaded ONCE. Store securely.",
+    "[ ] Note Key ID (10 chars) and Team ID (top-right of developer.apple.com)",
+    "[ ] In Firebase console → Project Settings → Cloud Messaging → iOS app → Upload APNs Auth Key",
+    "[ ] Set bundle ID in Xcode to production ID (currently org.reactjs.native.example.PPFMobile — change to com.ppf.mobile or your chosen ID)",
+    "[ ] Enable Push Notifications capability in Xcode → Signing & Capabilities",
+    "[ ] Enable Background Modes → Remote notifications in Xcode"
+  ],
+
+  "testing": {
+    "simulator": "APNs does not work on Simulator — use a real device for push testing",
+    "test_tool": "Use Firebase console → Cloud Messaging → Send test message using the device FCM token logged on app start",
+    "local_trigger": "Can manually POST to Supabase edge function with test payload to fire notification without a DB event"
+  }
+}
