@@ -5,7 +5,7 @@ import { colors, radius } from '../theme';
 const TABS = [
   { key: 'Home', label: 'Home', icon: '🏠' },
   { key: 'Marketplace', label: 'Suppliers', icon: '🔍' },
-  { key: 'Orders', label: 'Orders', icon: '📋' },
+  { key: 'Feed', label: 'Feed', icon: '�' },
   { key: 'Messages', label: 'Messages', icon: '💬' },
   { key: 'Profile', label: 'Profile', icon: '👤' },
 ];

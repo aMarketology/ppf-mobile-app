@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import {
-  fetchConversations, searchUsers, getOrCreateConversation,
+  fetchConversations, searchUsers, getOrCreateConversation, fetchProfiles,
   type Conv, type UserResult,
 } from '../services/messages';
 import { colors, spacing, radius } from '../theme';
@@ -18,10 +18,11 @@ export default function MessagesScreen({ onNavigate }: Props) {
   const jwt = session?.access_token ?? '';
 
   // ── Conversation list state ───────────────────────────────────────────────
-  const [convs,   setConvs]   = useState<Conv[]>([]);
-  const [status,  setStatus]  = useState<'loading' | 'error' | 'done'>('loading');
-  const [err,     setErr]     = useState<string | null>(null);
-  const [open,    setOpen]    = useState<Conv | null>(null);
+  const [convs,    setConvs]    = useState<Conv[]>([]);
+  const [userMap,  setUserMap]  = useState<Record<string, UserResult>>({});
+  const [status,   setStatus]   = useState<'loading' | 'error' | 'done'>('loading');
+  const [err,      setErr]      = useState<string | null>(null);
+  const [open,     setOpen]     = useState<Conv | null>(null);
 
   // ── New Message modal state ───────────────────────────────────────────────
   const [showModal,    setShowModal]    = useState(false);
@@ -38,8 +39,24 @@ export default function MessagesScreen({ onNavigate }: Props) {
     setStatus('loading');
     setErr(null);
     fetchConversations(user.id, jwt)
-      .then(data => { setConvs(data); setStatus('done'); })
-      .catch(e  => { setErr(String(e?.message ?? e)); setStatus('error'); });
+      .then(async data => {
+        setConvs(data);
+        // Resolve partner names
+        const partnerIds = data.map(c =>
+          c.participant_one_id === user.id ? c.participant_two_id : c.participant_one_id,
+        ).filter(Boolean);
+        const unique = [...new Set(partnerIds)];
+        if (unique.length > 0) {
+          try {
+            const profiles = await fetchProfiles(unique, jwt);
+            const map: Record<string, UserResult> = {};
+            profiles.forEach(p => { map[p.id] = p; });
+            setUserMap(prev => ({ ...prev, ...map }));
+          } catch (_) { /* non-fatal */ }
+        }
+        setStatus('done');
+      })
+      .catch(e => { setErr(String(e?.message ?? e)); setStatus('error'); });
   }
 
   useEffect(() => { loadConvs(); }, [user?.id, jwt]);
@@ -144,7 +161,12 @@ export default function MessagesScreen({ onNavigate }: Props) {
           keyExtractor={item => item.id}
           contentContainerStyle={{ paddingBottom: 40 }}
           renderItem={({ item }) => {
-            const initial = (item.subject ?? item.created_by ?? 'C')[0].toUpperCase();
+            const partnerId = item.participant_one_id === user?.id
+              ? item.participant_two_id
+              : item.participant_one_id;
+            const partner = userMap[partnerId];
+            const displayName = partner?.full_name ?? partner?.email ?? 'Direct Message';
+            const initial = displayName[0].toUpperCase();
             return (
               <TouchableOpacity style={s.row} onPress={() => setOpen(item)}>
                 <View style={s.avatar}>
@@ -152,12 +174,12 @@ export default function MessagesScreen({ onNavigate }: Props) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.rowTitle} numberOfLines={1}>
-                    {item.subject ?? 'Direct Message'}
+                    {displayName}
                   </Text>
                   <Text style={s.rowSub}>
                     {item.last_message_at
                       ? new Date(item.last_message_at).toLocaleDateString()
-                      : item.status ?? 'active'}
+                      : 'New conversation'}
                   </Text>
                 </View>
                 <Text style={s.chevron}>›</Text>

@@ -10,46 +10,51 @@ import {
   RefreshControl,
 } from 'react-native';
 import { colors, radius, spacing } from '../theme';
-import { companiesService } from '../services/companies';
-import type { CompanyProfile } from '../lib/types';
+import { useAuth } from '../context/AuthContext';
+import { fetchServices, formatServicePrice, type ServiceWithProvider } from '../services/servicesService';
 
 const FILTER_TABS = ['All', 'Civil', 'Mechanical', 'Electrical', 'Energy'];
 
 type Props = { onNavigate: (screen: string) => void };
 
 export default function MarketplaceScreen({ onNavigate }: Props) {
+  const { session } = useAuth();
+  const jwt = session?.access_token ?? '';
+
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
-  const [companies, setCompanies] = useState<CompanyProfile[]>([]);
+  const [services, setServices] = useState<ServiceWithProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
+    if (!jwt) return;
     try {
       isRefresh ? setRefreshing(true) : setLoading(true);
       setError(null);
-      const data = await companiesService.getAll({ verified: true });
-      setCompanies(data);
+      const data = await fetchServices(jwt);
+      setServices(data);
     } catch (e: any) {
-      setError(e.message ?? 'Failed to load suppliers');
+      setError(e.message ?? 'Failed to load services');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [jwt]);
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = companies.filter(c => {
+  const filtered = services.filter(s => {
     const matchSearch =
       search === '' ||
-      c.company_name.toLowerCase().includes(search.toLowerCase()) ||
-      (c.description ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (c.specialties ?? []).some(s => s.toLowerCase().includes(search.toLowerCase()));
+      s.title.toLowerCase().includes(search.toLowerCase()) ||
+      (s.description ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (s.tags ?? []).some(t => t.toLowerCase().includes(search.toLowerCase()));
     const matchFilter =
       activeFilter === 'All' ||
-      (c.specialties ?? []).some(s => s.toLowerCase().includes(activeFilter.toLowerCase()));
+      (s.category ?? '').toLowerCase().includes(activeFilter.toLowerCase()) ||
+      (s.tags ?? []).some(t => t.toLowerCase().includes(activeFilter.toLowerCase()));
     return matchSearch && matchFilter;
   });
 
@@ -59,7 +64,7 @@ export default function MarketplaceScreen({ onNavigate }: Props) {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Marketplace</Text>
         <Text style={styles.headerSub}>
-          {loading ? '...' : `${companies.length.toLocaleString()} verified suppliers`}
+          {loading ? '...' : `${services.length.toLocaleString()} engineering services`}
         </Text>
       </View>
 
@@ -71,7 +76,7 @@ export default function MarketplaceScreen({ onNavigate }: Props) {
             style={styles.searchInput}
             value={search}
             onChangeText={setSearch}
-            placeholder="Search suppliers, products..."
+            placeholder="Search services, categories..."
             placeholderTextColor={colors.textMuted}
           />
           {search.length > 0 && (
@@ -103,7 +108,7 @@ export default function MarketplaceScreen({ onNavigate }: Props) {
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.mint} />
-          <Text style={styles.loadingText}>Loading suppliers...</Text>
+          <Text style={styles.loadingText}>Loading services...</Text>
         </View>
       ) : error ? (
         <View style={styles.centered}>
@@ -128,58 +133,56 @@ export default function MarketplaceScreen({ onNavigate }: Props) {
           {filtered.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>🔍</Text>
-              <Text style={styles.emptyText}>No suppliers found</Text>
+              <Text style={styles.emptyText}>No services found</Text>
               <Text style={styles.emptySubtext}>Try adjusting your search or filters</Text>
             </View>
           ) : (
-            filtered.map((s, i) => (
-              <TouchableOpacity key={s.id ?? i} style={styles.card} activeOpacity={0.85}>
-                {s.is_verified && (
-                  <View style={styles.premiumBanner}>
-                    <Text style={styles.premiumText}>✓ Verified Supplier</Text>
-                  </View>
-                )}
-                <View style={styles.cardTop}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{s.company_name.charAt(0)}</Text>
-                  </View>
-                  <View style={styles.info}>
-                    <Text style={styles.name}>{s.company_name}</Text>
-                    {s.specialties && s.specialties.length > 0 && (
-                      <Text style={styles.category}>{s.specialties[0]}</Text>
-                    )}
-                    {(s.city || s.state) && (
+            filtered.map((s, i) => {
+              const providerName = s.provider?.full_name ?? 'Provider';
+              const initial = providerName[0]?.toUpperCase() ?? '?';
+              return (
+                <TouchableOpacity key={s.id ?? i} style={styles.card} activeOpacity={0.85}>
+                  <View style={styles.cardTop}>
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>{initial}</Text>
+                    </View>
+                    <View style={styles.info}>
+                      <Text style={styles.name}>{s.title}</Text>
+                      {s.category && (
+                        <Text style={styles.category}>{s.category}</Text>
+                      )}
                       <Text style={styles.location}>
-                        📍 {[s.city, s.state].filter(Boolean).join(', ')}
+                        � {providerName}
                       </Text>
-                    )}
+                    </View>
+                    <Text style={styles.priceTag}>{formatServicePrice(s.price)}</Text>
                   </View>
-                </View>
-                {s.description && (
-                  <Text style={styles.description} numberOfLines={2}>
-                    {s.description}
-                  </Text>
-                )}
-                {s.specialties && s.specialties.length > 0 && (
-                  <View style={styles.tags}>
-                    {s.specialties.slice(0, 3).map((tag, j) => (
-                      <View key={j} style={styles.tag}>
-                        <Text style={styles.tagText}>{tag}</Text>
-                      </View>
-                    ))}
+                  {s.description && (
+                    <Text style={styles.description} numberOfLines={2}>
+                      {s.description}
+                    </Text>
+                  )}
+                  {s.tags && s.tags.length > 0 && (
+                    <View style={styles.tags}>
+                      {s.tags.slice(0, 3).map((tag: string, j: number) => (
+                        <View key={j} style={styles.tag}>
+                          <Text style={styles.tagText}>{tag}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  <View style={styles.cardFooter}>
+                    <View style={{ flex: 1 }} />
+                    <TouchableOpacity style={styles.profileBtn}>
+                      <Text style={styles.profileBtnText}>Details</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.quoteBtn}>
+                      <Text style={styles.quoteBtnText}>Get Quote</Text>
+                    </TouchableOpacity>
                   </View>
-                )}
-                <View style={styles.cardFooter}>
-                  <View style={{ flex: 1 }} />
-                  <TouchableOpacity style={styles.profileBtn}>
-                    <Text style={styles.profileBtnText}>View Profile</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.quoteBtn}>
-                    <Text style={styles.quoteBtnText}>Get Quote</Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            ))
+                </TouchableOpacity>
+              );
+            })
           )}
           <View style={{ height: 32 }} />
         </ScrollView>
@@ -252,14 +255,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     overflow: 'hidden',
   },
-  premiumBanner: {
-    backgroundColor: colors.mintLight,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.mintMid,
-  },
-  premiumText: { fontSize: 11, fontWeight: '700', color: colors.mintDark },
   cardTop: { flexDirection: 'row', padding: spacing.md, paddingBottom: 8 },
   avatar: {
     width: 48,
@@ -275,6 +270,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 2 },
   category: { fontSize: 13, color: colors.textSecondary, marginBottom: 2 },
   location: { fontSize: 12, color: colors.textMuted },
+  priceTag: { fontSize: 16, fontWeight: '800', color: colors.mint, alignSelf: 'flex-start', marginLeft: 8 },
   description: {
     fontSize: 13,
     color: colors.textSecondary,

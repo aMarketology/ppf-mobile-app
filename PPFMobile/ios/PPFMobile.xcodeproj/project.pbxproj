@@ -11,6 +11,11 @@
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		AA000007000000000000000A /* PlusJakartaSans-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AA000002000000000000000A /* PlusJakartaSans-Bold.ttf */; };
+		AA000008000000000000000A /* PlusJakartaSans-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AA000003000000000000000A /* PlusJakartaSans-ExtraBold.ttf */; };
+		AA000009000000000000000A /* PlusJakartaSans-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AA000004000000000000000A /* PlusJakartaSans-Medium.ttf */; };
+		AA00000A000000000000000A /* PlusJakartaSans-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AA000005000000000000000A /* PlusJakartaSans-Regular.ttf */; };
+		AA00000B000000000000000A /* PlusJakartaSans-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AA000006000000000000000A /* PlusJakartaSans-SemiBold.ttf */; };
 		E2494698DC640A5BD8DD600E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -24,6 +29,11 @@
 		5DCACB8F33CDC322A6C60F78 /* libPods-PPFMobile.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-PPFMobile.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = PPFMobile/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = PPFMobile/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		AA000002000000000000000A /* PlusJakartaSans-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "PlusJakartaSans-Bold.ttf"; path = "Fonts/PlusJakartaSans-Bold.ttf"; sourceTree = "<group>"; };
+		AA000003000000000000000A /* PlusJakartaSans-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "PlusJakartaSans-ExtraBold.ttf"; path = "Fonts/PlusJakartaSans-ExtraBold.ttf"; sourceTree = "<group>"; };
+		AA000004000000000000000A /* PlusJakartaSans-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "PlusJakartaSans-Medium.ttf"; path = "Fonts/PlusJakartaSans-Medium.ttf"; sourceTree = "<group>"; };
+		AA000005000000000000000A /* PlusJakartaSans-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "PlusJakartaSans-Regular.ttf"; path = "Fonts/PlusJakartaSans-Regular.ttf"; sourceTree = "<group>"; };
+		AA000006000000000000000A /* PlusJakartaSans-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "PlusJakartaSans-SemiBold.ttf"; path = "Fonts/PlusJakartaSans-SemiBold.ttf"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -158,6 +168,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA000007000000000000000A /* PlusJakartaSans-Bold.ttf in Resources */,
+				AA000008000000000000000A /* PlusJakartaSans-ExtraBold.ttf in Resources */,
+				AA000009000000000000000A /* PlusJakartaSans-Medium.ttf in Resources */,
+				AA00000A000000000000000A /* PlusJakartaSans-Regular.ttf in Resources */,
+				AA00000B000000000000000A /* PlusJakartaSans-SemiBold.ttf in Resources */,
 				81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				E2494698DC640A5BD8DD600E /* PrivacyInfo.xcprivacy in Resources */,

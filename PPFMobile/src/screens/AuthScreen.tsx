@@ -15,12 +15,28 @@ import { useAuth } from '../context/AuthContext';
 import { colors, radius, spacing } from '../theme';
 
 export default function AuthScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
+
+  async function handleForgotPassword() {
+    if (!email) {
+      Alert.alert('Enter your email', 'Type your email address above, then tap Forgot password.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await resetPassword(email);
+      Alert.alert('Check your inbox', `A password reset link has been sent to ${email}.`);
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? 'Could not send reset email.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleSubmit() {
     if (!email || !password) {
@@ -138,7 +154,7 @@ export default function AuthScreen() {
           </TouchableOpacity>
 
           {mode === 'login' && (
-            <TouchableOpacity style={styles.forgotBtn}>
+            <TouchableOpacity style={styles.forgotBtn} onPress={handleForgotPassword}>
               <Text style={styles.forgotText}>Forgot password?</Text>
             </TouchableOpacity>
           )}

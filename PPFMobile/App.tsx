@@ -1,15 +1,21 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StripeProvider } from '@stripe/stripe-react-native';
 import HomeScreen from './src/screens/HomeScreen';
 import MarketplaceScreen from './src/screens/MarketplaceScreen';
 import OrdersScreen from './src/screens/OrdersScreen';
+import FeedScreen from './src/screens/FeedScreen';
 import MessagesScreen from './src/screens/MessagesScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import TokenScreen from './src/screens/TokenScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import TabBar from './src/components/TabBar';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { colors } from './src/theme';
+import { ENV } from './src/config/env';
+
+const STRIPE_PK = ENV.STRIPE_PUBLISHABLE_KEY;
 
 function AppContent() {
   const { session, loading } = useAuth();
@@ -34,8 +40,10 @@ function AppContent() {
       case 'Home':        return <HomeScreen onNavigate={setActiveTab} />;
       case 'Marketplace': return <MarketplaceScreen onNavigate={setActiveTab} />;
       case 'Orders':      return <OrdersScreen onNavigate={setActiveTab} />;
+      case 'Feed':        return <FeedScreen onNavigate={setActiveTab} />;
       case 'Messages':    return <MessagesScreen onNavigate={setActiveTab} />;
       case 'Profile':     return <ProfileScreen onNavigate={setActiveTab} />;
+      case 'Tokens':      return <TokenScreen onBack={() => setActiveTab('Profile')} />;
       default:            return <HomeScreen onNavigate={setActiveTab} />;
     }
   };
@@ -52,9 +60,11 @@ function AppContent() {
 function App() {
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
+      <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.precisionprojectflow">
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </StripeProvider>
     </SafeAreaProvider>
   );
 }

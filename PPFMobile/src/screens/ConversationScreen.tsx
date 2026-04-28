@@ -3,8 +3,10 @@ import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { fetchMessages, sendMessage, type Conv, type Msg } from '../services/messages';
+import { fetchMessages, sendMessage, fetchProfiles, type Conv, type Msg, type UserResult } from '../services/messages';
 import { colors, spacing, radius } from '../theme';
+
+const WEB_URL = 'https://precisionprojectflow.com';
 
 type Props = {
   conv: Conv;
@@ -19,7 +21,23 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [partnerName, setPartnerName] = useState('Conversation');
   const listRef = useRef<FlatList>(null);
+
+  // Resolve partner name
+  const partnerId = conv.participant_one_id === userId
+    ? conv.participant_two_id
+    : conv.participant_one_id;
+
+  useEffect(() => {
+    fetchProfiles([partnerId], jwt)
+      .then(profiles => {
+        if (profiles.length > 0) {
+          setPartnerName(profiles[0].full_name ?? profiles[0].email ?? 'User');
+        }
+      })
+      .catch(() => {});
+  }, [partnerId, jwt]);
 
   useEffect(() => {
     fetchMessages(conv.id, jwt)
@@ -33,12 +51,39 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
     setText('');
     setSending(true);
     try {
-      const msg = await sendMessage(conv.id, userId, trimmed, jwt);
+      // Try web API first (handles token deduction), fall back to direct insert
+      let msg: Msg;
+      try {
+        const res = await fetch(`${WEB_URL}/api/messages/send`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${jwt}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ conversationId: conv.id, content: trimmed }),
+        });
+        if (res.status === 402) {
+          setErr('Insufficient tokens. Buy more tokens to continue messaging.');
+          setText(trimmed);
+          setSending(false);
+          return;
+        }
+        if (res.ok) {
+          const json = await res.json();
+          msg = json.message ?? json;
+        } else {
+          // Web API not available — fall back to direct insert
+          msg = await sendMessage(conv.id, userId, trimmed, jwt);
+        }
+      } catch (_) {
+        // Network error to web API — fall back to direct insert
+        msg = await sendMessage(conv.id, userId, trimmed, jwt);
+      }
       setMsgs(prev => [...prev, msg]);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (e: any) {
       setErr(e?.message ?? 'Failed to send');
-      setText(trimmed); // restore on failure
+      setText(trimmed);
     } finally {
       setSending(false);
     }
@@ -55,7 +100,9 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
         <TouchableOpacity style={s.backBtn} onPress={onBack}>
           <Text style={s.backTxt}>← Back</Text>
         </TouchableOpacity>
-        <Text style={s.title} numberOfLines={1}>{conv.subject ?? 'Conversation'}</Text>
+        <Text style={s.title} numberOfLines={1}>
+          {partnerName}
+        </Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -93,7 +140,7 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
                 <Text style={[s.bubbleTxt, mine ? s.bubbleTxtMine : s.bubbleTxtTheirs]}>
                   {item.content}
                 </Text>
-                <Text style={s.bubbleTime}>
+                <Text style={[s.bubbleTime, !mine && s.bubbleTimeTheirs]}>
                   {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
               </View>
@@ -162,6 +209,7 @@ const s = StyleSheet.create({
   bubbleTxtMine: { color: '#fff' },
   bubbleTxtTheirs: { color: colors.textPrimary },
   bubbleTime: { fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 4, alignSelf: 'flex-end' },
+  bubbleTimeTheirs: { color: 'rgba(0,0,0,0.35)' },
   inputRow: {
     flexDirection: 'row', alignItems: 'flex-end',
     paddingHorizontal: spacing.md, paddingVertical: 10,

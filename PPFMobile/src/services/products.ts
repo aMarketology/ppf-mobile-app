@@ -1,51 +1,50 @@
-import { supabase } from '../lib/supabase';
+// Raw fetch — no supabase-js client (hangs in iOS simulator)
 import type { Product } from '../lib/types';
+import { restGet } from '../lib/restClient';
 
 export const productsService = {
-  async getAll(filters?: {
-    category?: string;
-    companyId?: string;
-    search?: string;
-    minPrice?: number;
-    maxPrice?: number;
-  }): Promise<Product[]> {
-    let query = supabase
-      .from('products')
-      .select('*, company:company_profiles(*)')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false });
+  async getAll(
+    jwt: string,
+    filters?: {
+      category?: string;
+      companyId?: string;
+      search?: string;
+      minPrice?: number;
+      maxPrice?: number;
+    },
+  ): Promise<Product[]> {
+    const params: string[] = [
+      'select=*',
+      'is_active=eq.true',
+      'order=created_at.desc',
+    ];
 
     if (filters?.companyId) {
-      query = query.eq('company_id', filters.companyId);
+      params.push(`company_id=eq.${filters.companyId}`);
     }
     if (filters?.category) {
-      query = query.eq('category', filters.category);
+      params.push(`category=eq.${encodeURIComponent(filters.category)}`);
     }
     if (filters?.search) {
-      query = query.or(
-        `name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`,
-      );
+      const q = encodeURIComponent(`%${filters.search}%`);
+      params.push(`or=(name.ilike.${q},description.ilike.${q})`);
     }
     if (filters?.minPrice !== undefined) {
-      query = query.gte('price', filters.minPrice);
+      params.push(`price=gte.${filters.minPrice}`);
     }
     if (filters?.maxPrice !== undefined) {
-      query = query.lte('price', filters.maxPrice);
+      params.push(`price=lte.${filters.maxPrice}`);
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
-    return data ?? [];
+    return restGet<Product[]>(`products?${params.join('&')}`, jwt);
   },
 
-  async getById(id: string): Promise<Product | null> {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*, company:company_profiles(*)')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data;
+  async getById(id: string, jwt: string): Promise<Product | null> {
+    const rows = await restGet<Product[]>(
+      `products?select=*&id=eq.${id}&limit=1`,
+      jwt,
+    );
+    return rows[0] ?? null;
   },
 
   /** Format cents to dollar string e.g. 45900 → "$459.00" */

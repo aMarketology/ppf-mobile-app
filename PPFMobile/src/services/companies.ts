@@ -1,65 +1,56 @@
-import { supabase } from '../lib/supabase';
+// Raw fetch — no supabase-js client (hangs in iOS simulator)
 import type { CompanyProfile } from '../lib/types';
+import { restGet } from '../lib/restClient';
 
 export const companiesService = {
-  async getAll(filters?: {
-    category?: string;
-    search?: string;
-    verified?: boolean;
-    limit?: number;
-  }): Promise<CompanyProfile[]> {
-    let query = supabase
-      .from('company_profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
+  async getAll(
+    jwt: string,
+    filters?: {
+      category?: string;
+      search?: string;
+      verified?: boolean;
+      limit?: number;
+    },
+  ): Promise<CompanyProfile[]> {
+    const params: string[] = ['select=*', 'order=created_at.desc'];
 
     if (filters?.verified !== undefined) {
-      query = query.eq('is_verified', filters.verified);
+      params.push(`is_verified=eq.${filters.verified}`);
     }
     if (filters?.search) {
-      query = query.or(
-        `company_name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`,
-      );
+      const q = encodeURIComponent(`%${filters.search}%`);
+      params.push(`or=(company_name.ilike.${q},description.ilike.${q})`);
     }
     if (filters?.category) {
-      query = query.contains('specialties', [filters.category]);
+      params.push(`specialties=cs.{${encodeURIComponent(filters.category)}}`);
     }
     if (filters?.limit) {
-      query = query.limit(filters.limit);
+      params.push(`limit=${filters.limit}`);
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
-    return data ?? [];
+    return restGet<CompanyProfile[]>(`company_profiles?${params.join('&')}`, jwt);
   },
 
-  async getById(id: string): Promise<CompanyProfile | null> {
-    const { data, error } = await supabase
-      .from('company_profiles')
-      .select('*')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data;
+  async getById(id: string, jwt: string): Promise<CompanyProfile | null> {
+    const rows = await restGet<CompanyProfile[]>(
+      `company_profiles?select=*&id=eq.${id}&limit=1`,
+      jwt,
+    );
+    return rows[0] ?? null;
   },
 
-  async getByOwner(userId: string): Promise<CompanyProfile | null> {
-    const { data, error } = await supabase
-      .from('company_profiles')
-      .select('*')
-      .eq('owner_id', userId)
-      .maybeSingle();
-    if (error) throw error;
-    return data;
+  async getByOwner(userId: string, jwt: string): Promise<CompanyProfile | null> {
+    const rows = await restGet<CompanyProfile[]>(
+      `company_profiles?select=*&owner_id=eq.${userId}&limit=1`,
+      jwt,
+    );
+    return rows[0] ?? null;
   },
 
-  async getFeatured(limit = 6): Promise<CompanyProfile[]> {
-    const { data, error } = await supabase
-      .from('company_profiles')
-      .select('*')
-      .eq('is_verified', true)
-      .limit(limit);
-    if (error) throw error;
-    return data ?? [];
+  async getFeatured(jwt: string, limit = 6): Promise<CompanyProfile[]> {
+    return restGet<CompanyProfile[]>(
+      `company_profiles?select=*&is_verified=eq.true&limit=${limit}`,
+      jwt,
+    );
   },
 };

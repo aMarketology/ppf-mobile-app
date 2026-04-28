@@ -1,42 +1,36 @@
-import { supabase } from '../lib/supabase';
-import type { ProductOrder } from '../lib/types';
+// Raw fetch — no supabase-js client (hangs in iOS simulator)
+import type { Order } from '../lib/types';
+import { restGet } from '../lib/restClient';
 
 export const ordersService = {
-  async getMyOrders(userId: string): Promise<ProductOrder[]> {
-    const { data, error } = await supabase
-      .from('product_orders')
-      .select('*, company:company_profiles(*)')
-      .eq('buyer_id', userId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data ?? [];
+  async getMyOrders(userId: string, jwt: string): Promise<Order[]> {
+    return restGet<Order[]>(
+      `orders?select=id,client_id,engineer_id,service_id,status,total_amount,stripe_payment_intent_id,created_at,completed_at&or=(client_id.eq.${userId},engineer_id.eq.${userId})&order=created_at.desc`,
+      jwt,
+    );
   },
 
-  async getById(id: string): Promise<ProductOrder | null> {
-    const { data, error } = await supabase
-      .from('product_orders')
-      .select('*, company:company_profiles(*), product:products(*)')
-      .eq('id', id)
-      .single();
-    if (error) throw error;
-    return data;
-  },
-
-  async getStats(userId: string) {
-    const { data, error } = await supabase
-      .from('product_orders')
-      .select('status, total_amount')
-      .eq('buyer_id', userId);
-    if (error) throw error;
-    const orders = data ?? [];
+  async getStats(userId: string, jwt: string) {
+    const orders = await restGet<{ status: string; total_amount: number }[]>(
+      `orders?select=status,total_amount&or=(client_id.eq.${userId},engineer_id.eq.${userId})`,
+      jwt,
+    );
     const totalSpent = orders
       .filter(o => o.status === 'completed')
-      .reduce((sum, o) => sum + o.total_amount, 0);
+      .reduce((sum: number, o) => sum + o.total_amount, 0);
     return {
       total: orders.length,
       completed: orders.filter(o => o.status === 'completed').length,
-      pending: orders.filter(o => o.status === 'pending').length,
+      pending: orders.filter(o => o.status === 'pending' || o.status === 'active').length,
       totalSpentCents: totalSpent,
     };
+  },
+
+  /** Format cents to dollar string e.g. 45900 → "$459.00" */
+  formatPrice(cents: number): string {
+    return `$${(cents / 100).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   },
 };

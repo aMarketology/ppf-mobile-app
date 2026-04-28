@@ -31,3 +31,12 @@ export const spacing = {
   xl: 32,
   xxl: 48,
 };
+
+// Plus Jakarta Sans — use these instead of raw fontFamily strings
+export const fonts = {
+  regular:   'PlusJakartaSans-Regular',
+  medium:    'PlusJakartaSans-Medium',
+  semiBold:  'PlusJakartaSans-SemiBold',
+  bold:      'PlusJakartaSans-Bold',
+  extraBold: 'PlusJakartaSans-ExtraBold',
+};
