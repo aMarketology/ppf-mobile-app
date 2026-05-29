@@ -31,15 +31,15 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhY
 # ─── Stripe ──────────────────────────────────────────────────────────────────
 # Secret key — SERVER ONLY, never ship in mobile bundle
 # Lives only in Next.js API routes (/api/stripe/*)
-STRIPE_SECRET_KEY=sk_test_51SZFYZ31QRE2QAFr3o17SHxf1eNjTRvp5WH8zciDPxGywLdtAHqHpa99NOw0nXk4QBTm5isJL9lTfbsf5bqnCemo00sxqXTWaC
+STRIPE_SECRET_KEY=sk_test_YOUR_STRIPE_SECRET_KEY_HERE
 
 # Publishable key — safe to embed in mobile client
 # Used to initialize Stripe SDK on device: Stripe(NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_51SZFYZ31QRE2QAFrEAaq9bbuJBOIAZiLGyFNvm8bCcXFWNrLY3YNpYhOgSywwjBXncuV5PD5TW9zQsGP6hBapMf800aaDfefiK
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_YOUR_STRIPE_PUBLISHABLE_KEY_HERE
 
 # Webhook secret — SERVER ONLY
 # Verifies Stripe event signatures in /api/stripe/webhook
-STRIPE_WEBHOOK_SECRET=whsec_2a073dccae7be91b58ac142ad37793cde964d11165d8e29408abceebfc839f8f
+STRIPE_WEBHOOK_SECRET=whsec_YOUR_WEBHOOK_SECRET_HERE
 
 # ─── Resend ──────────────────────────────────────────────────────────────────
 # SERVER ONLY — never ship in mobile bundle
