@@ -300,19 +300,19 @@ export default function FeedScreen({ onNavigate }: Props) {
           {/* Content */}
           <Text style={st.contentText}>{item.content}</Text>
 
-          {/* Parts request meta */}
-          {isPartsReq && (item.budget || item.deadline) ? (
+          {/* Parts request / Job post meta: budget + deadline */}
+          {(isPartsReq || isJob) && (item.budget || item.deadline) ? (
             <View style={st.metaRow}>
               {item.budget ? (
                 <View style={st.metaChip}>
                   <Text style={st.metaChipIcon}>💰</Text>
-                  <Text style={st.metaChipText}>Budget: ${item.budget.toLocaleString()}</Text>
+                  <Text style={st.metaChipText}>Budget: ${Number(item.budget).toLocaleString()}</Text>
                 </View>
               ) : null}
               {item.deadline ? (
                 <View style={st.metaChip}>
                   <Text style={st.metaChipIcon}>📅</Text>
-                  <Text style={st.metaChipText}>Due: {new Date(item.deadline).toLocaleDateString()}</Text>
+                  <Text style={st.metaChipText}>Due: {item.deadline}</Text>
                 </View>
               ) : null}
             </View>
@@ -346,7 +346,18 @@ export default function FeedScreen({ onNavigate }: Props) {
               </TouchableOpacity>
             ) : null}
             {isJob ? (
-              <TouchableOpacity style={st.applyBtn} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={st.applyBtn}
+                activeOpacity={0.8}
+                onPress={() => {
+                  // Navigate to Messages and start a conversation with the poster
+                  onNavigate('Messages');
+                  Alert.alert(
+                    'Apply for Job',
+                    `Send a message to ${item.author?.full_name ?? 'the poster'} to apply.`,
+                    [{ text: 'OK' }],
+                  );
+                }}>
                 <Text style={st.applyBtnTxt}>Apply →</Text>
               </TouchableOpacity>
             ) : null}

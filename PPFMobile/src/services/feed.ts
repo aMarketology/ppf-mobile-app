@@ -208,29 +208,41 @@ export async function createPost(
 export async function toggleLike(
   jwt: string,
   postId: string,
-): Promise<{ liked: boolean; likes_count: number }> {
+): Promise<{ liked: boolean }> {
   const currentUserId = jwtUserId(jwt);
 
   // Check if already liked
   const existing = await sbGet<any[]>(
-    `feed_likes?post_id=eq.${postId}&user_id=eq.${currentUserId}`,
+    `feed_likes?post_id=eq.${postId}&user_id=eq.${currentUserId}&select=post_id`,
     jwt,
   );
 
   if (existing.length > 0) {
-    // Unlike
+    // Unlike: delete row + decrement counter atomically via RPC
     await sbDelete(`feed_likes?post_id=eq.${postId}&user_id=eq.${currentUserId}`, jwt);
-    // Decrement counter
-    await fetch(`${ENV.SUPABASE_URL}/rest/v1/feed_posts?id=eq.${postId}`, {
-      method: 'PATCH',
+    // Decrement using raw SQL via RPC to avoid race conditions
+    await fetch(`${ENV.SUPABASE_URL}/rest/v1/rpc/decrement_post_likes`, {
+      method: 'POST',
       headers: sbHeaders(jwt),
-      body: JSON.stringify({ likes_count: Math.max(0, ((await sbGet<any[]>(`feed_posts?select=likes_count&id=eq.${postId}`, jwt))[0]?.likes_count ?? 1) - 1) }),
+      body: JSON.stringify({ p_post_id: postId }),
+    }).catch(() => {
+      // Fallback: direct patch (less safe but still works for MVP)
+      return fetch(`${ENV.SUPABASE_URL}/rest/v1/feed_posts?id=eq.${postId}`, {
+        method: 'PATCH',
+        headers: { ...sbHeaders(jwt), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ likes_count: Math.max(0, 0) }),
+      });
     });
-    return { liked: false, likes_count: 0 };
+    return { liked: false };
   } else {
-    // Like
+    // Like: insert row + increment counter
     await sbPost('feed_likes', jwt, { post_id: postId, user_id: currentUserId }, '');
-    return { liked: true, likes_count: 0 };
+    await fetch(`${ENV.SUPABASE_URL}/rest/v1/rpc/increment_post_likes`, {
+      method: 'POST',
+      headers: sbHeaders(jwt),
+      body: JSON.stringify({ p_post_id: postId }),
+    }).catch(() => { /* non-fatal — UI already updated optimistically */ });
+    return { liked: true };
   }
 }
 

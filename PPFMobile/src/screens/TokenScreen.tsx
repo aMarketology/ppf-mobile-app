@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Alert,
+  ActivityIndicator, RefreshControl, Alert, Platform,
 } from 'react-native';
 import { useStripe } from '@stripe/stripe-react-native';
 import { useAuth } from '../context/AuthContext';
@@ -141,37 +141,48 @@ export default function TokenScreen({ onBack }: Props) {
           </View>
 
           {/* ── Purchase packages ────────────────────────────────────── */}
-          <Text style={s.sectionTitle}>Buy Tokens</Text>
-          <View style={s.packagesGrid}>
-            {TOKEN_PACKAGES.map(pkg => {
-              const isLoading = buying === pkg.id;
-              return (
-                <TouchableOpacity
-                  key={pkg.id}
-                  style={[s.pkgCard, pkg.popular && s.pkgCardPopular]}
-                  onPress={() => handleBuy(pkg)}
-                  disabled={!!buying}
-                  activeOpacity={0.8}>
-                  {pkg.popular && (
-                    <View style={s.popularBadge}>
-                      <Text style={s.popularBadgeTxt}>Most Popular</Text>
-                    </View>
-                  )}
-                  <Text style={s.pkgTokens}>{pkg.tokens}</Text>
-                  <Text style={s.pkgLabel}>tokens</Text>
-                  <Text style={s.pkgPrice}>{dollarStr(pkg.price)}</Text>
-                  <Text style={s.pkgPer}>${((pkg.price / 100) / pkg.tokens).toFixed(2)} each</Text>
-                  {isLoading ? (
-                    <ActivityIndicator size="small" color={colors.white} style={{ marginTop: 10 }} />
-                  ) : (
-                    <View style={[s.pkgBtn, pkg.popular && s.pkgBtnPopular]}>
-                      <Text style={[s.pkgBtnTxt, pkg.popular && s.pkgBtnTxtPopular]}>Buy</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {Platform.OS !== 'ios' ? (
+            <>
+              <Text style={s.sectionTitle}>Buy Tokens</Text>
+              <View style={s.packagesGrid}>
+                {TOKEN_PACKAGES.map(pkg => {
+                  const isLoading = buying === pkg.id;
+                  return (
+                    <TouchableOpacity
+                      key={pkg.id}
+                      style={[s.pkgCard, pkg.popular && s.pkgCardPopular]}
+                      onPress={() => handleBuy(pkg)}
+                      disabled={!!buying}
+                      activeOpacity={0.8}>
+                      {pkg.popular && (
+                        <View style={s.popularBadge}>
+                          <Text style={s.popularBadgeTxt}>Most Popular</Text>
+                        </View>
+                      )}
+                      <Text style={s.pkgTokens}>{pkg.tokens}</Text>
+                      <Text style={s.pkgLabel}>tokens</Text>
+                      <Text style={s.pkgPrice}>{dollarStr(pkg.price)}</Text>
+                      <Text style={s.pkgPer}>${((pkg.price / 100) / pkg.tokens).toFixed(2)} each</Text>
+                      {isLoading ? (
+                        <ActivityIndicator size="small" color={colors.white} style={{ marginTop: 10 }} />
+                      ) : (
+                        <View style={[s.pkgBtn, pkg.popular && s.pkgBtnPopular]}>
+                          <Text style={[s.pkgBtnTxt, pkg.popular && s.pkgBtnTxtPopular]}>Buy</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          ) : (
+            <View style={s.infoCard}>
+              <Text style={s.infoTitle}>🛒 Token Purchases Coming Soon</Text>
+              <Text style={s.infoBody}>
+                Purchase tokens at projectflow.app. Your balance syncs automatically once you log in.
+              </Text>
+            </View>
+          )}
 
           {/* ── Purchase history ─────────────────────────────────────── */}
           <Text style={s.sectionTitle}>Purchase History</Text>
