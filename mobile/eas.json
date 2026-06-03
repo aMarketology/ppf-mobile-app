@@ -17,7 +17,7 @@
       }
     },
     "production": {
-      "autoIncrement": true,
+      "autoIncrement": false,
       "ios": {
         "buildConfiguration": "Release"
       },
@@ -35,7 +35,8 @@
       },
       "android": {
         "serviceAccountKeyPath": "./play-store-key.json",
-        "track": "internal"
+        "track": "internal",
+        "packageName": "com.precisionprojectflow.app"
       }
     }
   }

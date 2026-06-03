@@ -30,7 +30,7 @@
         "backgroundColor": "#052e16"
       },
       "package": "com.precisionprojectflow.app",
-      "versionCode": 2,
+      "versionCode": 1,
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
