@@ -35,8 +35,7 @@
       },
       "android": {
         "serviceAccountKeyPath": "./play-store-key.json",
-        "track": "internal",
-        "packageName": "com.precisionprojectflow.app"
+        "track": "internal"
       }
     }
   }
