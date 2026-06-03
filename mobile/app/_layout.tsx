@@ -1,0 +1,55 @@
+import React, { useEffect } from 'react';
+import { Stack } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import {
+  useFonts,
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
+import { supabase } from '../lib/supabase';
+import { router } from 'expo-router';
+
+export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.replace('/(auth)/welcome');
+      } else if (event === 'SIGNED_IN') {
+        router.replace('/(tabs)');
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (!fontsLoaded) return null;
+
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <StatusBar style="light" />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="engineer/[id]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="service/[id]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="messages/[id]" options={{ presentation: 'card' }} />
+          <Stack.Screen name="buy-tokens" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="settings" options={{ presentation: 'card' }} />
+        </Stack>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
+}
