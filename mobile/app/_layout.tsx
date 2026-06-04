@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -15,7 +16,7 @@ import { supabase } from '../lib/supabase';
 import { router } from 'expo-router';
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,
@@ -34,7 +35,14 @@ export default function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (!fontsLoaded) return null;
+  // Show spinner while fonts load; if fonts fail, continue anyway
+  if (!fontsLoaded && !fontError) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#0A0A0A', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator color="#6C63FF" size="large" />
+      </View>
+    );
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
