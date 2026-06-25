@@ -26,7 +26,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT' || !session) {
+      // Only react to explicit sign in/out events, not the initial session check
+      // (index.tsx handles the initial redirect)
+      if (event === 'SIGNED_OUT') {
         router.replace('/(auth)/welcome');
       } else if (event === 'SIGNED_IN') {
         router.replace('/(tabs)');
