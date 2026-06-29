@@ -2,17 +2,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, ActivityIndicator, RefreshControl,
+  ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { Search, Filter, Briefcase, Wrench } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  Search, Filter, Briefcase, Wrench, Zap, TrendingUp,
+  Clock, Star, MapPin, ChevronRight,
+} from 'lucide-react-native';
 import { supabase, type Service, type Profile } from '../../lib/supabase';
 import ServiceCard from '../../components/ServiceCard';
 import { colors, spacing, radius, fonts } from '../../lib/theme';
 
 const CATEGORIES = ['All', 'Engineering', 'Design', 'Consulting', 'Installation', 'Maintenance', 'Other'];
-const SORT_OPTIONS = ['Newest', 'Price: Low', 'Price: High', 'Top Rated'];
 
 export default function FeedScreen() {
   const [services, setServices] = useState<Service[]>([]);
@@ -68,62 +72,10 @@ export default function FeedScreen() {
     );
   }
 
+  const firstName = myProfile?.full_name?.split(' ')[0] ?? 'there';
+
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello, {myProfile?.full_name?.split(' ')[0] ?? 'there'} 👋</Text>
-          <Text style={styles.subGreeting}>Find engineering services</Text>
-        </View>
-        <TouchableOpacity onPress={() => router.push('/settings')} style={styles.avatarBtn}>
-          {myProfile?.avatar_url ? (
-            <Image source={{ uri: myProfile.avatar_url }} style={styles.avatar} />
-          ) : (
-            <View style={styles.avatarFallback}>
-              <Text style={styles.avatarInitial}>
-                {myProfile?.full_name?.[0]?.toUpperCase() ?? '?'}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Search */}
-      <View style={styles.searchRow}>
-        <View style={styles.searchBox}>
-          <Search size={16} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search services..."
-            placeholderTextColor={colors.textMuted}
-            value={search}
-            onChangeText={handleSearch}
-          />
-        </View>
-        <TouchableOpacity style={styles.filterBtn}>
-          <Filter size={18} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Category chips */}
-      <FlatList
-        data={CATEGORIES}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={c => c}
-        contentContainerStyle={styles.categoryList}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.chip, activeCategory === item && styles.chipActive]}
-            onPress={() => handleCategoryChange(item)}
-          >
-            <Text style={[styles.chipText, activeCategory === item && styles.chipTextActive]}>{item}</Text>
-          </TouchableOpacity>
-        )}
-      />
-
-      {/* Services list */}
       <FlatList
         data={services}
         keyExtractor={s => s.id}
@@ -136,6 +88,105 @@ export default function FeedScreen() {
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        ListHeaderComponent={
+          <View>
+            {/* ── Header ── */}
+            <View style={styles.header}>
+              <View style={styles.headerLeft}>
+                <Text style={styles.greeting}>Hello, {firstName} 👋</Text>
+                <Text style={styles.subGreeting}>Discover engineering services</Text>
+              </View>
+              <TouchableOpacity onPress={() => router.push('/settings')} style={styles.avatarBtn}>
+                {myProfile?.avatar_url ? (
+                  <Image source={{ uri: myProfile.avatar_url }} style={styles.avatar} />
+                ) : (
+                  <View style={styles.avatarFallback}>
+                    <Text style={styles.avatarInitial}>
+                      {firstName[0]?.toUpperCase() ?? '?'}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* ── Hero Banner ── */}
+            <LinearGradient
+              colors={[colors.gradientStart, colors.gradientMid]}
+              style={styles.heroBanner}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.heroContent}>
+                <View style={styles.heroText}>
+                  <Text style={styles.heroTitle}>Find the right{'\n'}engineer today</Text>
+                  <Text style={styles.heroSub}>Browse verified professionals and services</Text>
+                </View>
+                <View style={styles.heroIcon}>
+                  <Zap size={28} color={colors.accent} />
+                </View>
+              </View>
+              {/* Quick stats */}
+              <View style={styles.heroStats}>
+                <View style={styles.heroStat}>
+                  <TrendingUp size={14} color={colors.accent} />
+                  <Text style={styles.heroStatText}>10K+ Engineers</Text>
+                </View>
+                <View style={styles.heroStatDivider} />
+                <View style={styles.heroStat}>
+                  <Star size={14} color={colors.accent} />
+                  <Text style={styles.heroStatText}>98% Satisfaction</Text>
+                </View>
+              </View>
+            </LinearGradient>
+
+            {/* ── Search ── */}
+            <View style={styles.searchRow}>
+              <View style={styles.searchBox}>
+                <Search size={16} color={colors.textMuted} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search services..."
+                  placeholderTextColor={colors.textMuted}
+                  value={search}
+                  onChangeText={handleSearch}
+                />
+              </View>
+              <TouchableOpacity style={styles.filterBtn}>
+                <Filter size={18} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* ── Categories ── */}
+            <View style={styles.categoriesHeader}>
+              <Text style={styles.sectionTitle}>Categories</Text>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryList}
+            >
+              {CATEGORIES.map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.chip, activeCategory === cat && styles.chipActive]}
+                  onPress={() => handleCategoryChange(cat)}
+                >
+                  <Text style={[styles.chipText, activeCategory === cat && styles.chipTextActive]}>
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* ── Results Header ── */}
+            <View style={styles.resultsHeader}>
+              <Text style={styles.resultsTitle}>
+                {activeCategory === 'All' ? 'All Services' : activeCategory}
+              </Text>
+              <Text style={styles.resultsCount}>{services.length} results</Text>
+            </View>
+          </View>
+        }
         ListEmptyComponent={
           <View style={styles.empty}>
             <Briefcase size={48} color={colors.textMuted} />
@@ -151,33 +202,103 @@ export default function FeedScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: spacing.lg },
-  greeting: { fontFamily: fonts.bold, fontSize: 20, color: colors.text },
+
+  // ── Header ──
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm,
+  },
+  headerLeft: {},
+  greeting: { fontFamily: fonts.bold, fontSize: 22, color: colors.text },
   subGreeting: { fontFamily: fonts.regular, fontSize: 13, color: colors.textMuted, marginTop: 2 },
-  avatarBtn: { width: 40, height: 40 },
-  avatar: { width: 40, height: 40, borderRadius: 20 },
-  avatarFallback: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  avatarInitial: { fontFamily: fonts.bold, fontSize: 16, color: colors.primary },
-  searchRow: { flexDirection: 'row', paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: spacing.sm },
+  avatarBtn: { width: 44, height: 44 },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
+  avatarFallback: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: colors.primaryLight, alignItems: 'center', justifyContent: 'center',
+  },
+  avatarInitial: { fontFamily: fonts.bold, fontSize: 18, color: colors.primary },
+
+  // ── Hero Banner ──
+  heroBanner: {
+    marginHorizontal: spacing.lg, marginTop: spacing.md,
+    borderRadius: 20, padding: 20, overflow: 'hidden',
+  },
+  heroContent: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontFamily: fonts.bold, fontSize: 20, lineHeight: 26,
+    color: colors.white, marginBottom: 6,
+  },
+  heroSub: {
+    fontFamily: fonts.regular, fontSize: 13,
+    color: 'rgba(255,255,255,0.65)',
+  },
+  heroIcon: {
+    width: 52, height: 52, borderRadius: 16,
+    backgroundColor: 'rgba(245,158,11,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  heroStats: {
+    flexDirection: 'row', alignItems: 'center', marginTop: 16,
+    paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  heroStat: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+  },
+  heroStatText: {
+    fontFamily: fonts.medium, fontSize: 12, color: 'rgba(255,255,255,0.8)',
+  },
+  heroStatDivider: {
+    width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.15)',
+    marginHorizontal: 16,
+  },
+
+  // ── Search ──
+  searchRow: {
+    flexDirection: 'row', paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm,
+  },
   searchBox: {
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.surface, borderRadius: 14, paddingHorizontal: spacing.md,
+    paddingVertical: 12, borderWidth: 1, borderColor: colors.border,
   },
   searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.text },
   filterBtn: {
-    width: 44, height: 44, backgroundColor: colors.surface, borderRadius: radius.lg,
+    width: 48, height: 48, backgroundColor: colors.surface, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border,
   },
-  categoryList: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: spacing.sm },
+
+  // ── Categories ──
+  categoriesHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm,
+  },
+  sectionTitle: { fontFamily: fonts.semiBold, fontSize: 15, color: colors.text },
+  categoryList: { paddingHorizontal: spacing.lg, gap: 8 },
   chip: {
-    paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.full,
+    paddingHorizontal: 16, paddingVertical: 9, borderRadius: 12,
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { fontFamily: fonts.medium, fontSize: 13, color: colors.textSecondary },
   chipTextActive: { color: colors.white },
-  list: { padding: spacing.lg, paddingTop: 0, gap: spacing.md },
+
+  // ── Results ──
+  resultsHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline',
+    paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.sm,
+  },
+  resultsTitle: { fontFamily: fonts.bold, fontSize: 17, color: colors.text },
+  resultsCount: { fontFamily: fonts.regular, fontSize: 13, color: colors.textMuted },
+
+  // ── List ──
+  list: { paddingHorizontal: spacing.lg, paddingBottom: 20, gap: spacing.md },
+
+  // ── Empty ──
   empty: { alignItems: 'center', paddingVertical: 80, gap: spacing.sm },
   emptyTitle: { fontFamily: fonts.semiBold, fontSize: 16, color: colors.text },
   emptyText: { fontFamily: fonts.regular, fontSize: 13, color: colors.textMuted },
