@@ -29,21 +29,21 @@ export default function SettingsScreen() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
 
-    const { error } = await supabase.from('profiles').upsert({
-      id: user.id,
+    const { error } = await supabase.from('profiles').update({
       full_name: profile.full_name,
       company_name: profile.company_name,
       bio: profile.bio,
       location: profile.location,
-      phone: profile.phone,
-      website: profile.website,
-      specialty: profile.specialty,
+      phone: (profile as any).phone,
+      website: (profile as any).website,
+      specialty: (profile as any).specialty,
       updated_at: new Date().toISOString(),
-    });
+    }).eq('id', user.id);
 
     setSaving(false);
     if (error) {
-      Alert.alert('Error', 'Failed to save profile. Please try again.');
+      console.error('Profile save error:', JSON.stringify(error));
+      Alert.alert('Error', `Failed to save: ${error.message}`);
     } else {
       Alert.alert('Saved!', 'Your profile has been updated.', [
         { text: 'OK', onPress: () => router.back() },
