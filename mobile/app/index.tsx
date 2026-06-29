@@ -5,14 +5,17 @@ import { supabase } from '../lib/supabase';
 
 export default function Index() {
   useEffect(() => {
-    // Single initial auth check — determines where to route on app open
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        router.replace('/(tabs)');
-      } else {
-        router.replace('/(auth)/welcome');
-      }
-    });
+    // Small delay to ensure the root layout and auth listener are mounted first
+    const timer = setTimeout(() => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          router.replace('/(tabs)');
+        } else {
+          router.replace('/(auth)/welcome');
+        }
+      });
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   // Dark background while checking session — prevents white flash

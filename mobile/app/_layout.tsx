@@ -1,5 +1,5 @@
 import 'react-native-url-polyfill/auto';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -25,15 +25,20 @@ export default function RootLayout() {
     PlusJakartaSans_800ExtraBold,
   });
 
+  // Track whether we've already navigated to avoid redirect loops
+  const hasNavigated = useRef(false);
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') {
-        router.replace('/(auth)/welcome');
-      } else if (event === 'SIGNED_IN') {
-        router.replace('/(tabs)');
-      } else if (event === 'PASSWORD_RECOVERY') {
-        // User tapped the reset link in their email
+      if (event === 'PASSWORD_RECOVERY') {
+        hasNavigated.current = true;
         router.replace('/(auth)/reset-password');
+      } else if (event === 'SIGNED_OUT') {
+        hasNavigated.current = false;
+        router.replace('/(auth)/welcome');
+      } else if (event === 'SIGNED_IN' && !hasNavigated.current) {
+        hasNavigated.current = true;
+        router.replace('/(tabs)');
       }
     });
     return () => subscription.unsubscribe();
