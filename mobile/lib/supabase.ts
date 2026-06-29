@@ -18,6 +18,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false, // MUST be false in React Native
   },
+  global: {
+    // Use React Native's built-in fetch instead of whatwg-fetch polyfill
+    fetch: fetch.bind(globalThis),
+  },
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
