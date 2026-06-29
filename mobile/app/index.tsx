@@ -20,8 +20,8 @@ export default function Index() {
 
   // Dark background while checking session — prevents white flash
   return (
-    <View style={{ flex: 1, backgroundColor: '#0A0A0A', justifyContent: 'center', alignItems: 'center' }}>
-      <ActivityIndicator color="#6C63FF" size="large" />
+    <View style={{ flex: 1, backgroundColor: '#052e16', justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator color="#F59E0B" size="large" />
     </View>
   );
 }
