@@ -40,6 +40,14 @@ export default function SettingsScreen() {
       updated_at: new Date().toISOString(),
     }).eq('id', user.id);
 
+    // Also sync display name into Supabase auth metadata so the
+    // session user.user_metadata.full_name stays in sync
+    if (!error && profile.full_name) {
+      await supabase.auth.updateUser({
+        data: { full_name: profile.full_name },
+      });
+    }
+
     setSaving(false);
     if (error) {
       console.error('Profile save error:', JSON.stringify(error));
