@@ -11,7 +11,7 @@ export default function Index() {
         if (session) {
           router.replace('/(tabs)');
         } else {
-          router.replace('/(auth)/welcome');
+          router.replace('/(auth)/login');
         }
       });
     }, 100);

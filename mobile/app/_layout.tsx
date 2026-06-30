@@ -1,6 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import React, { useEffect, useRef } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Linking } from 'react-native';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -28,20 +28,64 @@ export default function RootLayout() {
   // Track whether we've already navigated to avoid redirect loops
   const hasNavigated = useRef(false);
 
+  // ── Handle incoming deep links (password reset email link) ──────────────
+  async function handleDeepLink(url: string) {
+    if (!url) return;
+
+    // Supabase sends either:
+    //   PKCE flow  → ppf://reset-password?code=XXXX
+    //   Legacy     → ppf://reset-password#access_token=XX&refresh_token=XX&type=recovery
+    if (!url.includes('reset-password')) return;
+
+    try {
+      const fragment = url.includes('#') ? url.split('#')[1] : '';
+      const query    = url.includes('?') ? url.split('?')[1] : '';
+      const params   = new URLSearchParams(query || fragment);
+
+      const code          = params.get('code');
+      const access_token  = params.get('access_token');
+      const refresh_token = params.get('refresh_token');
+
+      if (code) {
+        // PKCE flow — exchange the one-time code for a real session
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (!error) {
+          // PASSWORD_RECOVERY event will fire → _layout listener below handles nav
+        }
+      } else if (access_token && refresh_token) {
+        // Legacy implicit flow
+        await supabase.auth.setSession({ access_token, refresh_token });
+      }
+    } catch (e) {
+      console.warn('Deep link handling error:', e);
+    }
+  }
+
   useEffect(() => {
+    // Handle deep link if app was cold-started via the reset link
+    Linking.getInitialURL().then(url => { if (url) handleDeepLink(url); });
+
+    // Handle deep link if app was already open
+    const linkSub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
+
+    // Auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         hasNavigated.current = true;
         router.replace('/(auth)/reset-password');
       } else if (event === 'SIGNED_OUT') {
         hasNavigated.current = false;
-        router.replace('/(auth)/welcome');
+        router.replace('/(auth)/login');
       } else if (event === 'SIGNED_IN' && !hasNavigated.current) {
         hasNavigated.current = true;
         router.replace('/(tabs)');
       }
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      subscription.unsubscribe();
+      linkSub.remove();
+    };
   }, []);
 
   // Show spinner while fonts load; if fonts fail, continue anyway
