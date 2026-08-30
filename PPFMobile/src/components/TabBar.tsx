@@ -1,13 +1,15 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { colors, radius } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ShoppingBag, FileText, Activity, MessageCircle, User } from 'lucide-react-native';
+import { colors, radius, fonts } from '../theme';
 
 const TABS = [
-  { key: 'Home', label: 'Home', icon: '🏠' },
-  { key: 'Marketplace', label: 'Marketplace', icon: '🏭' },
-  { key: 'Feed', label: 'Feed', icon: '�' },
-  { key: 'Messages', label: 'Messages', icon: '💬' },
-  { key: 'Profile', label: 'Profile', icon: '👤' },
+  { key: 'Activity', label: 'Feed', Icon: Activity },
+  { key: 'Shop', label: 'Shop', Icon: ShoppingBag },
+  { key: 'RFQ', label: 'RFQ', Icon: FileText },
+  { key: 'Messages', label: 'Messages', Icon: MessageCircle },
+  { key: 'Profile', label: 'Profile', Icon: User },
 ];
 
 type Props = {
@@ -17,11 +19,14 @@ type Props = {
 };
 
 export default function TabBar({ activeTab, onTabPress, unreadMessages = 0 }: Props) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom + 6 }]}>
       {TABS.map(tab => {
         const isActive = activeTab === tab.key;
         const showBadge = tab.key === 'Messages' && unreadMessages > 0;
+        const { Icon } = tab;
         return (
           <TouchableOpacity
             key={tab.key}
@@ -29,10 +34,16 @@ export default function TabBar({ activeTab, onTabPress, unreadMessages = 0 }: Pr
             onPress={() => onTabPress(tab.key)}
             activeOpacity={0.7}>
             <View style={[styles.iconWrap, isActive && styles.iconWrapActive]}>
-              <Text style={styles.icon}>{tab.icon}</Text>
+              <Icon
+                size={20}
+                strokeWidth={isActive ? 2.4 : 2}
+                color={isActive ? colors.mint : colors.textMuted}
+              />
               {showBadge && (
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{unreadMessages}</Text>
+                  <Text style={styles.badgeText}>
+                    {unreadMessages > 9 ? '9+' : unreadMessages}
+                  </Text>
                 </View>
               )}
             </View>
@@ -52,7 +63,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingBottom: 8,
     paddingTop: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
@@ -62,30 +72,40 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, alignItems: 'center' },
   iconWrap: {
-    width: 40,
-    height: 32,
-    borderRadius: radius.md,
+    width: 44,
+    height: 30,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
+    marginBottom: 3,
     position: 'relative',
   },
   iconWrapActive: { backgroundColor: colors.mintLight },
-  icon: { fontSize: 18 },
-  label: { fontSize: 10, color: colors.textMuted, fontWeight: '500' },
-  labelActive: { color: colors.mintDark, fontWeight: '700' },
+  label: {
+    fontSize: 10,
+    color: colors.textMuted,
+    fontFamily: fonts.medium,
+    letterSpacing: 0.2,
+  },
+  labelActive: { color: colors.mint, fontFamily: fonts.bold },
   badge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 16,
+    top: -3,
+    right: -4,
+    minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.mint,
+    paddingHorizontal: 4,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: colors.white,
   },
-  badgeText: { fontSize: 9, fontWeight: '800', color: colors.white },
+  badgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.white,
+    fontFamily: fonts.bold,
+  },
 });

@@ -6,7 +6,7 @@ import {
 import { useStripe } from '@stripe/stripe-react-native';
 import { useAuth } from '../context/AuthContext';
 import {
-  fetchTokenBalance, fetchPurchaseHistory, createPaymentIntent,
+  fetchPurchaseHistory, createPaymentIntent,
   TOKEN_PACKAGES,
   type TokenPurchase, type TokenPackage,
 } from '../services/tokens';
@@ -15,15 +15,16 @@ import { colors, spacing, radius } from '../theme';
 type Props = { onBack: () => void };
 
 export default function TokenScreen({ onBack }: Props) {
-  const { user, session } = useAuth();
+  const { user, session, profile, refreshProfile } = useAuth();
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const jwt = session?.access_token ?? '';
 
-  const [balance,   setBalance]   = useState<number | null>(null);
+  // Use shared profile balance as source of truth
+  const balance = profile?.token_balance ?? 0;
   const [history,   setHistory]   = useState<TokenPurchase[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [buying,    setBuying]    = useState<string | null>(null); // package id
+  const [buying,    setBuying]    = useState<string | null>(null);
   const [err,       setErr]       = useState<string | null>(null);
 
   const load = useCallback(async (quiet = false) => {
@@ -31,11 +32,9 @@ export default function TokenScreen({ onBack }: Props) {
     if (!quiet) setLoading(true);
     setErr(null);
     try {
-      const [bal, hist] = await Promise.all([
-        fetchTokenBalance(user.id, jwt),
-        fetchPurchaseHistory(user.id, jwt),
-      ]);
-      setBalance(bal);
+      // Refresh profile to get latest token balance
+      await refreshProfile();
+      const hist = await fetchPurchaseHistory(user.id, jwt);
       setHistory(hist);
     } catch (e: any) {
       setErr(e?.message ?? 'Failed to load');
@@ -73,9 +72,12 @@ export default function TokenScreen({ onBack }: Props) {
       }
 
       // 4. Payment succeeded — webhook credits tokens server-side.
-      //    Reload balance after a short delay to let webhook process.
+      //    Reload balance and refresh profile context.
       Alert.alert('✅ Payment successful!', `${pkg.tokens} tokens are being added to your account.`);
-      setTimeout(() => load(true), 2000);
+      setTimeout(() => {
+        load(true);
+        refreshProfile();
+      }, 2000);
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Purchase failed');
     } finally {

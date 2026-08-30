@@ -21,7 +21,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Upload profile photos and project images",
         "NSPhotoLibraryUsageDescription": "Select images for your profile and services",
-        "NSMicrophoneUsageDescription": "Record videos for project showcases"
+        "NSMicrophoneUsageDescription": "Record videos for project showcases",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -46,7 +47,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

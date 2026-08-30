@@ -1,0 +1,14 @@
+# ─── Apple API Keys — NEVER commit .p8 files ──────────────────────────────
+*.p8
+AuthKey_*.p8
+
+# ─── Environment files ────────────────────────────────────────────────────
+.env
+.env.local
+.env.staging
+.env.production
+
+# ─── Build artifacts ──────────────────────────────────────────────────────
+build/
+*.xcarchive
+*.ipa

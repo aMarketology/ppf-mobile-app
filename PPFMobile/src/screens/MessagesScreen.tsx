@@ -6,16 +6,19 @@ import {
 import { useAuth } from '../context/AuthContext';
 import {
   fetchConversations, searchUsers, getOrCreateConversation, fetchProfiles,
-  type Conv, type UserResult,
+  fetchUnreadCount, type Conv, type UserResult,
 } from '../services/messages';
-import { colors, spacing, radius } from '../theme';
+import { colors, spacing, radius, fonts } from '../theme';
 import ConversationScreen from './ConversationScreen';
+
+type SectionTab = 'all' | 'channels' | 'groups' | 'dms';
 
 type Props = { onNavigate: (screen: string) => void };
 
 export default function MessagesScreen({ onNavigate }: Props) {
-  const { user, session } = useAuth();
+  const { user, session, profile } = useAuth();
   const jwt = session?.access_token ?? '';
+  const tokenBalance = profile?.token_balance ?? 0;
 
   // ── Conversation list state ───────────────────────────────────────────────
   const [convs,    setConvs]    = useState<Conv[]>([]);
@@ -23,6 +26,8 @@ export default function MessagesScreen({ onNavigate }: Props) {
   const [status,   setStatus]   = useState<'loading' | 'error' | 'done'>('loading');
   const [err,      setErr]      = useState<string | null>(null);
   const [open,     setOpen]     = useState<Conv | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [lastMessages, setLastMessages] = useState<Record<string, string>>({});
 
   // ── New Message modal state ───────────────────────────────────────────────
   const [showModal,    setShowModal]    = useState(false);
@@ -32,6 +37,17 @@ export default function MessagesScreen({ onNavigate }: Props) {
   const [starting,     setStarting]     = useState(false);
   const [modalErr,     setModalErr]     = useState<string | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Section tab state ────────────────────────────────────────────────────
+  const [sectionTab, setSectionTab] = useState<SectionTab>('all');
+  const [convSearch, setConvSearch] = useState('');
+
+  const SECTION_TABS: { key: SectionTab; label: string; icon: string }[] = [
+    { key: 'all',      label: 'All',       icon: '💬' },
+    { key: 'channels', label: 'Channels',  icon: '#' },
+    { key: 'groups',   label: 'Groups',    icon: '👥' },
+    { key: 'dms',      label: 'DMs',       icon: '✉️' },
+  ];
 
   // ── Load conversations ────────────────────────────────────────────────────
   function loadConvs() {
@@ -54,6 +70,11 @@ export default function MessagesScreen({ onNavigate }: Props) {
             setUserMap(prev => ({ ...prev, ...map }));
           } catch (_) { /* non-fatal */ }
         }
+        // Fetch unread counts
+        try {
+          const counts = await fetchUnreadCount(user.id, data.map(c => c.id), jwt);
+          setUnreadCounts(counts);
+        } catch (_) { /* non-fatal */ }
         setStatus('done');
       })
       .catch(e => { setErr(String(e?.message ?? e)); setStatus('error'); });
@@ -134,30 +155,81 @@ export default function MessagesScreen({ onNavigate }: Props) {
     );
   }
 
-  // ── Render: main inbox ────────────────────────────────────────────────────
+  // ── Render: main inbox (Slack-style) ──────────────────────────────────────
   return (
     <View style={s.root}>
-      {/* Header */}
+      {/* Header with token balance */}
       <View style={s.header}>
-        <Text style={s.title}>Messages</Text>
-        <TouchableOpacity style={s.btn} onPress={() => setShowModal(true)}>
-          <Text style={s.btnTxt}>+ New</Text>
-        </TouchableOpacity>
+        <View>
+          <Text style={s.title}>Messages</Text>
+          <Text style={s.subtitle}>Slack-style workspace</Text>
+        </View>
+        <View style={s.headerRight}>
+          <TouchableOpacity
+            style={s.tokenBadge}
+            onPress={() => onNavigate('Tokens')}
+            activeOpacity={0.7}
+          >
+            <Text style={s.tokenIcon}>🪙</Text>
+            <Text style={s.tokenText}>{tokenBalance}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.newBtn} onPress={() => setShowModal(true)}>
+            <Text style={s.newBtnIcon}>+</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Search conversations */}
+      <View style={s.convSearchWrap}>
+        <Text style={s.convSearchIcon}>🔍</Text>
+        <TextInput
+          style={s.convSearchInput}
+          value={convSearch}
+          onChangeText={setConvSearch}
+          placeholder="Search conversations..."
+          placeholderTextColor={colors.textMuted}
+        />
+      </View>
+
+      {/* Section Tabs — Slack-style */}
+      <View style={s.sectionTabs}>
+        {SECTION_TABS.map(tab => {
+          const isActive = sectionTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[s.sectionTab, isActive && s.sectionTabActive]}
+              onPress={() => setSectionTab(tab.key)}
+            >
+              <Text style={s.sectionTabIcon}>{tab.icon}</Text>
+              <Text style={[s.sectionTabText, isActive && s.sectionTabTextActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Conversation list */}
       {convs.length === 0 ? (
         <View style={s.center}>
-          <Text style={{ fontSize: 48 }}>💬</Text>
+          <Text style={s.emptyIcon}>💬</Text>
           <Text style={s.emptyTitle}>No conversations yet</Text>
           <Text style={s.muted}>Start a new message to get going</Text>
-          <TouchableOpacity style={[s.btn, { marginTop: 20 }]} onPress={() => setShowModal(true)}>
-            <Text style={s.btnTxt}>+ New Message</Text>
+          <TouchableOpacity style={[s.newBtnLarge, { marginTop: 20 }]} onPress={() => setShowModal(true)}>
+            <Text style={s.newBtnLargeText}>+ New Message</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
-          data={convs}
+          data={convs.filter(c => {
+            if (convSearch) {
+              const partnerId = c.participant_one_id === user?.id ? c.participant_two_id : c.participant_one_id;
+              const name = (userMap[partnerId]?.full_name ?? '').toLowerCase();
+              return name.includes(convSearch.toLowerCase());
+            }
+            return true;
+          })}
           keyExtractor={item => item.id}
           contentContainerStyle={{ paddingBottom: 40 }}
           renderItem={({ item }) => {
@@ -167,22 +239,51 @@ export default function MessagesScreen({ onNavigate }: Props) {
             const partner = userMap[partnerId];
             const displayName = partner?.full_name ?? partner?.email ?? 'Direct Message';
             const initial = displayName[0].toUpperCase();
+            const unreadCount = unreadCounts[item.id] ?? 0;
+            const isUnlocked = item.is_unlocked !== false;
+            const timeStr = item.last_message_at
+              ? formatTime(item.last_message_at)
+              : '';
+
             return (
-              <TouchableOpacity style={s.row} onPress={() => setOpen(item)}>
-                <View style={s.avatar}>
-                  <Text style={s.avatarTxt}>{initial}</Text>
+              <TouchableOpacity
+                style={[s.row, unreadCount > 0 && s.rowUnread]}
+                onPress={() => setOpen(item)}
+                activeOpacity={0.7}
+              >
+                {/* Avatar with online dot */}
+                <View style={s.avatarWrap}>
+                  <View style={[s.avatar, unreadCount > 0 && s.avatarUnread]}>
+                    <Text style={s.avatarTxt}>{initial}</Text>
+                  </View>
+                  {!isUnlocked && (
+                    <View style={s.lockBadge}>
+                      <Text style={s.lockBadgeText}>🔒</Text>
+                    </View>
+                  )}
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.rowTitle} numberOfLines={1}>
-                    {displayName}
-                  </Text>
-                  <Text style={s.rowSub}>
-                    {item.last_message_at
-                      ? new Date(item.last_message_at).toLocaleDateString()
-                      : 'New conversation'}
+
+                {/* Name + preview */}
+                <View style={s.rowContent}>
+                  <View style={s.rowTop}>
+                    <Text style={[s.rowTitle, unreadCount > 0 && s.rowTitleUnread]} numberOfLines={1}>
+                      {!isUnlocked ? '🔒 ' : ''}{displayName}
+                    </Text>
+                    {timeStr ? (
+                      <Text style={[s.rowTime, unreadCount > 0 && s.rowTimeUnread]}>{timeStr}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={[s.rowPreview, unreadCount > 0 && s.rowPreviewUnread]} numberOfLines={1}>
+                    {item.last_message_at ? 'Tap to view conversation' : 'New conversation — say hello! 👋'}
                   </Text>
                 </View>
-                <Text style={s.chevron}>›</Text>
+
+                {/* Unread badge */}
+                {unreadCount > 0 && (
+                  <View style={s.badge}>
+                    <Text style={s.badgeTxt}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           }}
@@ -212,7 +313,7 @@ export default function MessagesScreen({ onNavigate }: Props) {
           <View style={s.searchRow}>
             <Text style={s.searchLabel}>To:</Text>
             <TextInput
-              style={s.searchInput}
+              style={s.searchField}
               placeholder="Search by name…"
               placeholderTextColor={colors.textMuted}
               value={searchQuery}
@@ -265,6 +366,22 @@ export default function MessagesScreen({ onNavigate }: Props) {
   );
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  if (isToday) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000);
+  if (diffDays < 7) {
+    return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+  }
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
 const s = StyleSheet.create({
   root:        { flex: 1, backgroundColor: colors.bg },
   center:      { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
@@ -274,6 +391,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   title:       { fontSize: 24, fontWeight: '800', color: colors.textPrimary },
+  subtitle:    { fontSize: 14, color: colors.textMuted, marginTop: 4 },
   muted:       { fontSize: 14, color: colors.textMuted, marginTop: 8, textAlign: 'center' },
   errText:     { fontSize: 13, color: '#e53e3e', textAlign: 'center', marginBottom: 16 },
   emptyTitle:  { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginTop: 8, marginBottom: 4 },
@@ -285,13 +403,45 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: colors.border,
     backgroundColor: colors.white,
   },
+  avatarWrap: {
+    position: 'relative',
+    width: 44, height: 44, borderRadius: 22,
+    marginRight: 12,
+  },
   avatar:      {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: colors.mintMid, alignItems: 'center', justifyContent: 'center', marginRight: 12,
+    backgroundColor: colors.mintMid, alignItems: 'center', justifyContent: 'center',
   },
   avatarTxt:   { fontSize: 16, fontWeight: '800', color: colors.mintDark },
+  lockBadge: {
+    position: 'absolute',
+    right: -4, top: -4,
+    width: 20, height: 20, borderRadius: 10,
+    backgroundColor: colors.error, alignItems: 'center', justifyContent: 'center',
+  },
+  lockBadgeText: {
+    fontSize: 12, color: '#fff',
+  },
+  rowContent: {
+    flex: 1,
+  },
+  rowTop: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  },
   rowTitle:    { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  rowSub:      { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  rowTitleUnread: { fontWeight: '700', color: colors.textPrimary },
+  rowTime: {
+    fontSize: 12, color: colors.textMuted,
+  },
+  rowTimeUnread: {
+    fontWeight: '700', color: colors.textPrimary,
+  },
+  rowPreview: {
+    fontSize: 13, color: colors.textMuted, marginTop: 2,
+  },
+  rowPreviewUnread: {
+    fontWeight: '500', color: colors.textPrimary,
+  },
   chevron:     { fontSize: 22, color: colors.textMuted, marginLeft: 8 },
   // Modal
   modal:       { flex: 1, backgroundColor: colors.bg },
@@ -312,7 +462,14 @@ const s = StyleSheet.create({
     backgroundColor: colors.white,
   },
   searchLabel: { fontSize: 15, fontWeight: '600', color: colors.textPrimary, marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary },
+  searchInput: {
+    flex: 1, fontSize: 14, fontFamily: fonts.regular, color: colors.textPrimary,
+  },
+  searchField: {
+    flex: 1, fontSize: 15, color: colors.textPrimary,
+    paddingVertical: 8, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+  },
   resultRow:   {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: spacing.md, paddingVertical: 14,
@@ -322,5 +479,108 @@ const s = StyleSheet.create({
   resultAvatar: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: colors.mintMid, alignItems: 'center', justifyContent: 'center', marginRight: 12,
+  },
+  badge: {
+    minWidth: 24, height: 24, borderRadius: 12,
+    backgroundColor: colors.error, alignItems: 'center', justifyContent: 'center', marginLeft: 8,
+  },
+  badgeTxt: {
+    fontSize: 12, fontWeight: '700', color: '#fff',
+  },
+  // Tabs
+  tabs: {
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+    paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  tab: {
+    flex: 1, alignItems: 'center', paddingVertical: 12,
+  },
+  tabActive: {
+    borderBottomWidth: 2, borderBottomColor: colors.mint,
+  },
+  tabTxt: {
+    fontSize: 15, fontWeight: '600', color: colors.textPrimary,
+  },
+  tabTxtActive: {
+    color: colors.mint,
+  },
+  // Section Tabs
+  sectionTabs: {
+    flexDirection: 'row',
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  sectionTab: {
+    flex: 1, alignItems: 'center', paddingVertical: spacing.sm,
+  },
+  sectionTabActive: {
+    borderBottomWidth: 2, borderBottomColor: colors.mint,
+  },
+  sectionTabIcon: {
+    fontSize: 16, marginBottom: 2,
+  },
+  sectionTabText: {
+    fontSize: 11, fontFamily: fonts.medium, color: colors.textMuted,
+  },
+  sectionTabTextActive: {
+    color: colors.mintDark, fontFamily: fonts.semiBold,
+  },
+  // Header
+  headerRight: {
+    flexDirection: 'row', alignItems: 'center',
+  },
+  tokenBadge: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.mint, borderRadius: radius.md,
+    paddingHorizontal: 10, paddingVertical: 6, marginRight: 12,
+  },
+  tokenIcon: {
+    fontSize: 16, color: '#fff', marginRight: 4,
+  },
+  tokenText: {
+    fontSize: 14, fontWeight: '700', color: '#fff',
+  },
+  newBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.mint, alignItems: 'center', justifyContent: 'center',
+  },
+  newBtnIcon: {
+    fontSize: 24, color: '#fff', lineHeight: 24,
+  },
+  // Empty state
+  emptyIcon: {
+    fontSize: 48,
+  },
+  newBtnLarge: {
+    backgroundColor: colors.mint, borderRadius: radius.md, paddingVertical: 12,
+    paddingHorizontal: 20, alignItems: 'center',
+  },
+  newBtnLargeText: {
+    fontSize: 16, fontWeight: '700', color: '#fff',
+  },
+  // Row states
+  rowUnread: {
+    backgroundColor: '#EFF6FF',
+  },
+  avatarUnread: {
+    borderWidth: 2, borderColor: colors.mint,
+  },
+  rowSub: {
+    fontSize: 13, color: colors.textMuted, marginTop: 2,
+  },
+  // Search conversations
+  convSearchWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    backgroundColor: colors.white,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  convSearchIcon: {
+    fontSize: 14, marginRight: spacing.sm, color: colors.textMuted,
+  },
+  convSearchInput: {
+    flex: 1, fontSize: 14, fontFamily: fonts.regular, color: colors.textPrimary,
   },
 });

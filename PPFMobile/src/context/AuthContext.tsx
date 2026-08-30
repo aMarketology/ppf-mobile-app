@@ -7,6 +7,7 @@ import React, {
 } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { restGet } from '../lib/restClient';
 import type { Profile } from '../lib/types';
 
 interface AuthContextValue {
@@ -18,6 +19,7 @@ interface AuthContextValue {
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -37,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       } else {
         setSession(data.session);
-        fetchProfile(data.session.user.id);
+        fetchProfile(data.session.user.id, data.session.access_token);
       }
     }).catch(() => setLoading(false));
 
@@ -46,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (_event, newSession) => {
         setSession(newSession);
         if (newSession?.user) {
-          await fetchProfile(newSession.user.id);
+          await fetchProfile(newSession.user.id, newSession.access_token);
         } else {
           setProfile(null);
           setLoading(false);
@@ -60,15 +62,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  async function fetchProfile(userId: string) {
+  async function fetchProfile(userId: string, jwt?: string) {
     try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      setProfile(data ?? null);
-    } catch {
+      // Use restGet (raw fetch) instead of supabase.from() to avoid AsyncStorage hang
+      const token = jwt ?? session?.access_token;
+      if (!token) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+      const rows = await restGet<Profile[]>(
+        `profiles?select=*&id=eq.${userId}&limit=1`,
+        token,
+      );
+      setProfile(rows[0] ?? null);
+    } catch (e) {
+      console.warn('[AuthContext] fetchProfile failed:', e);
       setProfile(null);
     } finally {
       setLoading(false);
@@ -99,6 +108,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }
 
+  async function refreshProfile() {
+    if (!session?.user) return;
+    await fetchProfile(session.user.id);
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -110,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         signOut,
         resetPassword,
+        refreshProfile,
       }}>
       {children}
     </AuthContext.Provider>

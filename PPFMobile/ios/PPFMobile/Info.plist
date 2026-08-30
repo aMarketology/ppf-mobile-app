@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>PPFMobile</string>
+	<string>Precision Project Flow</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -33,8 +33,14 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>Precision Project Flow uses the camera to upload photos for your profile and project posts.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Precision Project Flow accesses your photo library to upload images for your profile and project posts.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Precision Project Flow uses the microphone for video recording in project posts.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

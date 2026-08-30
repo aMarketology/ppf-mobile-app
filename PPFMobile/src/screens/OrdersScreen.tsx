@@ -125,7 +125,7 @@ export default function OrdersScreen({ onNavigate }: Props) {
               <Text style={styles.emptyIcon}>📦</Text>
               <Text style={styles.emptyText}>No orders yet</Text>
               <Text style={styles.emptySubtext}>Browse the marketplace to get started</Text>
-              <TouchableOpacity style={styles.browseBtn} onPress={() => onNavigate('Marketplace')}>
+              <TouchableOpacity style={styles.browseBtn} onPress={() => onNavigate('Shop')}>
                 <Text style={styles.browseBtnText}>Browse Marketplace</Text>
               </TouchableOpacity>
             </View>

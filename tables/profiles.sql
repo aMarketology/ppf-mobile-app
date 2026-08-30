@@ -9,6 +9,8 @@ create table public.profiles (
   avatar_url text null,
   updated_at timestamp with time zone null default now(),
   token_balance integer not null default 0,
+  is_admin boolean not null default false,
+  company_id uuid null,
   constraint profiles_pkey primary key (id),
   constraint profiles_id_fkey foreign KEY (id) references auth.users (id) on delete CASCADE,
   constraint profiles_user_type_check check (

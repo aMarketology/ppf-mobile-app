@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "b5cc1252-6426-41ce-b73b-5e7f8d728d7c"
+      }
+    },
+    "android": {
+      "package": "com.amarketology.ppfmobileapproot"
+    }
+  }
+}

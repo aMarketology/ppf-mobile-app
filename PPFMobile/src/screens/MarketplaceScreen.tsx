@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { colors, radius, spacing, fonts } from '../theme';
+import { colors, radius, spacing, fonts, shadows } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import { fetchServices, formatServicePrice, type ServiceWithProvider } from '../services/servicesService';
 
@@ -78,7 +78,12 @@ export default function MarketplaceScreen({ onNavigate }: Props) {
 
       {/* ── Hero Header ──────────────────────────────────────────────── */}
       <View style={s.hero}>
-        <Text style={s.heroEyebrow}>PRECISION PROJECT FLOW</Text>
+        <View style={s.brandRow}>
+          <View style={s.brandLogo}>
+            <Text style={s.brandLogoTxt}>PPF</Text>
+          </View>
+          <Text style={s.heroEyebrow}>PRECISION PROJECT FLOW</Text>
+        </View>
         <Text style={s.heroTitle}>Source Industrial{'\n'}Products & Services</Text>
         <Text style={s.heroSub}>
           Connect with verified engineering suppliers, manufacturers, and service providers
@@ -218,10 +223,16 @@ export default function MarketplaceScreen({ onNavigate }: Props) {
 
                     {/* Actions */}
                     <View style={s.cardFooter}>
-                      <TouchableOpacity style={s.profileBtn}>
+                      <TouchableOpacity
+                        style={s.profileBtn}
+                        onPress={() => onNavigate('Messages')}
+                      >
                         <Text style={s.profileBtnText}>View Profile</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={s.quoteBtn}>
+                      <TouchableOpacity
+                        style={s.quoteBtn}
+                        onPress={() => onNavigate('Messages')}
+                      >
                         <Text style={s.quoteBtnText}>Request Quote</Text>
                       </TouchableOpacity>
                     </View>
@@ -237,7 +248,10 @@ export default function MarketplaceScreen({ onNavigate }: Props) {
             <Text style={s.rfqSub}>
               Send RFQs to multiple suppliers simultaneously and compare side-by-side
             </Text>
-            <TouchableOpacity style={s.rfqBtn}>
+            <TouchableOpacity
+              style={s.rfqBtn}
+              onPress={() => onNavigate('RFQ')}
+            >
               <Text style={s.rfqBtnText}>Create RFQ</Text>
             </TouchableOpacity>
           </View>
@@ -254,42 +268,55 @@ const s = StyleSheet.create({
 
   // Hero
   hero: {
-    backgroundColor: colors.mintDark,
+    backgroundColor: colors.bg,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
   },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: spacing.md },
+  brandLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.mint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.logo,
+  },
+  brandLogoTxt: { fontSize: 12, fontFamily: fonts.extraBold, color: colors.white, letterSpacing: 0.5 },
   heroEyebrow: {
     fontSize: 10,
     fontFamily: fonts.bold,
-    color: 'rgba(255,255,255,0.65)',
+    color: colors.textMuted,
     letterSpacing: 1.5,
-    marginBottom: 6,
   },
   heroTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontFamily: fonts.extraBold,
-    color: colors.white,
-    lineHeight: 30,
+    color: colors.textPrimary,
+    lineHeight: 32,
     marginBottom: 6,
   },
   heroSub: {
     fontSize: 13,
     fontFamily: fonts.regular,
-    color: 'rgba(255,255,255,0.8)',
+    color: colors.textSecondary,
     lineHeight: 18,
     marginBottom: spacing.md,
   },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.15)',
-    borderRadius: radius.md,
-    paddingVertical: 12,
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
   },
   statItem: { flex: 1, alignItems: 'center' },
-  statBorder: { borderRightWidth: 1, borderRightColor: 'rgba(255,255,255,0.2)' },
-  statValue: { fontSize: 20, fontFamily: fonts.extraBold, color: colors.white },
-  statLabel: { fontSize: 10, fontFamily: fonts.medium, color: 'rgba(255,255,255,0.7)', textAlign: 'center', marginTop: 2 },
+  statBorder: { borderRightWidth: 1, borderRightColor: colors.border },
+  statValue: { fontSize: 20, fontFamily: fonts.extraBold, color: colors.mint },
+  statLabel: { fontSize: 10, fontFamily: fonts.medium, color: colors.textMuted, textAlign: 'center', marginTop: 2 },
 
   // Search
   searchWrap: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },

@@ -183,6 +183,52 @@ export interface FeedLike {
   user_id: string;
 }
 
+// ─── Site Activities (Blockchain-style audit ledger) ─────────────────────────
+
+export type ActivityType =
+  | 'rfq_posted'
+  | 'rfq_awarded'
+  | 'offer_submitted'
+  | 'social_post_created'
+  | 'order_placed'
+  | 'order_completed'
+  | 'company_joined'
+  | 'team_member_added';
+
+export interface ActivityActor {
+  full_name: string;
+  avatar_url: string | null;
+  user_type: string;
+}
+
+export interface SiteActivity {
+  id: string;
+  activity_type: ActivityType;
+  actor_id: string;
+  target_type: string | null;
+  target_id: string | null;
+  summary: string;
+  metadata: Record<string, any> | null;
+  previous_hash: string | null;
+  row_hash: string;
+  created_at: string;
+  // client-side enriched
+  actor: ActivityActor;
+}
+
+export interface ActivityPage {
+  activities: SiteActivity[];
+  page: number;
+  hasMore: boolean;
+  total: number;
+}
+
+export interface ActivityFilter {
+  key: ActivityType | 'all';
+  label: string;
+  icon: string;
+}
+
 // ─── Friends ──────────────────────────────────────────────────────────────────
 export type FriendStatus = 'pending' | 'accepted' | 'declined';
 
@@ -211,4 +257,65 @@ export interface AuthUser {
   id: string;
   email: string;
   profile?: Profile;
+}
+
+// ─── RFQ (Request for Quote) ─────────────────────────────────────────────────
+
+export type RfqStatus = 'open' | 'in_review' | 'awarded' | 'closed';
+export type RfqTypeField = 'product' | 'service';
+
+export interface RfqClient {
+  id: string;
+  full_name: string;
+  avatar_url: string | null;
+  company_name: string | null;
+}
+
+export interface Rfq {
+  id: string;
+  slug: string | null;
+  client_id: string;
+  title: string;
+  rfq_type: RfqTypeField;
+  category: string;
+  description: string;
+  quantity: string | null;
+  budget: string | null;
+  timeline: string | null;
+  location: string | null;
+  material: string | null;
+  attachment_urls: string[] | null;
+  nda_required: boolean;
+  is_asap: boolean;
+  line_items: Record<string, any>[] | null;
+  status: RfqStatus;
+  created_at: string;
+  updated_at: string;
+  // enriched by fetchRfqs (mobile mirrors desktop API)
+  client: RfqClient | null;
+  offers_count: number;
+  lowest_offer: number | null;
+  my_offer: number | null;
+}
+
+export interface RfqOffer {
+  id: string;
+  rfq_id: string;
+  vendor_id: string;
+  amount: number;
+  notes: string | null;
+  delivery_days: number | null;
+  status: 'pending' | 'accepted' | 'rejected' | 'withdrawn';
+  conversation_id: string | null;
+  message_id: string | null;
+  created_at: string;
+  // enriched
+  vendor?: Profile;
+}
+
+export interface RfqPage {
+  rfqs: Rfq[];
+  page: number;
+  hasMore: boolean;
+  total: number;
 }

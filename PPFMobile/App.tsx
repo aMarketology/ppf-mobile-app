@@ -14,12 +14,17 @@ import TabBar from './src/components/TabBar';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { colors } from './src/theme';
 import { ENV } from './src/config/env';
+import ActivityFeedScreen from './src/screens/ActivityFeedScreen';
+import RFQMarketplaceScreen from './src/screens/RFQMarketplaceScreen';
+import CreateRFQScreen from './src/screens/CreateRFQScreen';
+import SubmitOfferScreen from './src/screens/SubmitOfferScreen';
 
 const STRIPE_PK = ENV.STRIPE_PUBLISHABLE_KEY;
 
 function AppContent() {
   const { session, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState('Home');
+  const [activeTab, setActiveTab] = useState('Activity');
+  const [selectedRfq, setSelectedRfq] = useState<any>(null);
   const insets = useSafeAreaInsets();
 
   if (loading) {
@@ -37,14 +42,18 @@ function AppContent() {
 
   const renderScreen = () => {
     switch (activeTab) {
-      case 'Home':        return <HomeScreen onNavigate={setActiveTab} />;
-      case 'Marketplace': return <MarketplaceScreen onNavigate={setActiveTab} />;
-      case 'Orders':      return <OrdersScreen onNavigate={setActiveTab} />;
+      case 'Activity':    return <ActivityFeedScreen onNavigate={setActiveTab} />;
+      case 'Shop':        return <MarketplaceScreen onNavigate={setActiveTab} />;
+      case 'RFQ':         return <RFQMarketplaceScreen onNavigate={setActiveTab} onSelectRfq={setSelectedRfq} />;
       case 'Feed':        return <FeedScreen onNavigate={setActiveTab} />;
       case 'Messages':    return <MessagesScreen onNavigate={setActiveTab} />;
       case 'Profile':     return <ProfileScreen onNavigate={setActiveTab} />;
+      case 'Orders':      return <OrdersScreen onNavigate={setActiveTab} />;
+      case 'Home':        return <HomeScreen onNavigate={setActiveTab} />;
       case 'Tokens':      return <TokenScreen onBack={() => setActiveTab('Profile')} />;
-      default:            return <HomeScreen onNavigate={setActiveTab} />;
+      case 'CreateRFQ':   return <CreateRFQScreen onBack={() => setActiveTab('RFQ')} onNavigate={setActiveTab} />;
+      case 'SubmitOffer': return selectedRfq ? <SubmitOfferScreen rfq={selectedRfq} onBack={() => setActiveTab('RFQ')} onNavigate={setActiveTab} /> : <RFQMarketplaceScreen onNavigate={setActiveTab} onSelectRfq={setSelectedRfq} />;
+      default:            return <ActivityFeedScreen onNavigate={setActiveTab} />;
     }
   };
 
@@ -60,7 +69,7 @@ function AppContent() {
 function App() {
   return (
     <SafeAreaProvider>
-      <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.precisionprojectflow">
+      <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.maxdeleonardis.precisionprojectflow">
         <AuthProvider>
           <AppContent />
         </AuthProvider>

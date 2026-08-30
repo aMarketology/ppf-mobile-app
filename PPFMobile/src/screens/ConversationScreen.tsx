@@ -1,10 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { fetchMessages, sendMessage, fetchProfiles, type Conv, type Msg, type UserResult } from '../services/messages';
+import {
+  fetchMessages, sendMessage, fetchProfiles,
+  subscribeToMessages, markMessagesRead, broadcastTyping,
+  unlockConversation,
+  type Conv, type Msg, type UserResult,
+} from '../services/messages';
 import { colors, spacing, radius } from '../theme';
+import { ENV } from '../config/env';
+import UnlockModal from '../components/UnlockModal';
+import RFQOfferCard, { type RfqOfferData } from '../components/RFQOfferCard';
 
 const WEB_URL = 'https://precisionprojectflow.com';
 
@@ -22,7 +30,11 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState('Conversation');
+  const [typingUser, setTypingUser] = useState<string | null>(null);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
   const listRef = useRef<FlatList>(null);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didMarkRead = useRef(false);
 
   // Resolve partner name
   const partnerId = conv.participant_one_id === userId
@@ -43,13 +55,71 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
     fetchMessages(conv.id, jwt)
       .then(data => { setMsgs(data); setLoading(false); })
       .catch(e => { setErr(String(e?.message ?? e)); setLoading(false); });
-  }, [conv.id, jwt]);
+
+    // Real-time subscription for new messages
+    const unsubscribe = subscribeToMessages(conv.id, jwt, (newMsg: Msg) => {
+      // Skip if it's our own message (optimistically added or sent by us)
+      if (newMsg.sender_id === userId) {
+        // Replace any matching temp messages with the real one
+        setMsgs(prev =>
+          prev.map(m => (m._temp && m.content === newMsg.content ? { ...newMsg, _temp: undefined } : m)),
+        );
+        return;
+      }
+      setMsgs(prev => [...prev, newMsg]);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [conv.id, jwt, userId]);
+
+  useEffect(() => {
+    if (didMarkRead.current) return;
+    didMarkRead.current = true;
+
+    const timer = setTimeout(() => {
+      markMessagesRead(conv.id, userId, jwt).catch(() => {});
+    }, 3000);
+
+    return () => {
+      clearTimeout(timer);
+      didMarkRead.current = false;
+    };
+  }, [conv.id, userId, jwt, msgs]);
+
+  const handleTyping = useCallback(() => {
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    try {
+      broadcastTyping(conv.id, userId, true);
+    } catch (_) { /* non-critical */ }
+    typingTimer.current = setTimeout(() => {
+      setTypingUser(null);
+    }, 2500);
+  }, [conv.id, userId]);
 
   async function handleSend() {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
     setText('');
     setSending(true);
+
+    // Optimistic: show message immediately with temp ID
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: Msg = {
+      id: tempId,
+      conversation_id: conv.id,
+      sender_id: userId,
+      content: trimmed,
+      is_read: false,
+      read_at: null,
+      created_at: new Date().toISOString(),
+      _temp: true,
+    };
+    setMsgs(prev => [...prev, optimistic]);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+
     try {
       // Try web API first (handles token deduction), fall back to direct insert
       let msg: Msg;
@@ -65,6 +135,8 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
         if (res.status === 402) {
           setErr('Insufficient tokens. Buy more tokens to continue messaging.');
           setText(trimmed);
+          // Remove optimistic message on 402
+          setMsgs(prev => prev.filter(m => m.id !== tempId));
           setSending(false);
           return;
         }
@@ -72,21 +144,26 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
           const json = await res.json();
           msg = json.message ?? json;
         } else {
-          // Web API not available — fall back to direct insert
           msg = await sendMessage(conv.id, userId, trimmed, jwt);
         }
       } catch (_) {
-        // Network error to web API — fall back to direct insert
         msg = await sendMessage(conv.id, userId, trimmed, jwt);
       }
-      setMsgs(prev => [...prev, msg]);
+      // Replace temp with real message
+      setMsgs(prev => prev.map(m => m.id === tempId ? msg : m));
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     } catch (e: any) {
+      // Remove optimistic on error
+      setMsgs(prev => prev.filter(m => m.id !== tempId));
       setErr(e?.message ?? 'Failed to send');
       setText(trimmed);
     } finally {
       setSending(false);
     }
+  }
+
+  function handleUnlock() {
+    setShowUnlockModal(true);
   }
 
   return (
@@ -95,15 +172,23 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}>
 
-      {/* Header */}
+      {/* Header — Slack-style */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={onBack}>
-          <Text style={s.backTxt}>← Back</Text>
+          <Text style={s.backTxt}>←</Text>
         </TouchableOpacity>
-        <Text style={s.title} numberOfLines={1}>
-          {partnerName}
-        </Text>
-        <View style={{ width: 60 }} />
+        <View style={s.headerCenter}>
+          <Text style={s.title} numberOfLines={1}>
+            {partnerName}
+          </Text>
+          <View style={s.statusRow}>
+            <View style={s.onlineDot} />
+            <Text style={s.statusText}>Active now</Text>
+          </View>
+        </View>
+        <TouchableOpacity style={s.headerAction} onPress={() => setShowUnlockModal(true)}>
+          <Text style={s.headerActionText}>🔒</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Error banner */}
@@ -134,6 +219,34 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
             </View>
           }
           renderItem={({ item }) => {
+            // RFQ Offer Card
+            if (item.message_type === 'rfq_offer' && item.message_metadata) {
+              const offerData = item.message_metadata as unknown as RfqOfferData;
+              return (
+                <RFQOfferCard
+                  data={offerData}
+                  currentUserId={userId}
+                  isUnlocked={conv.is_unlocked ?? false}
+                  onUnlock={async () => {
+                    const result = await unlockConversation(conv.id, jwt);
+                    if (!result.success) setErr(result.error ?? 'Failed to unlock');
+                  }}
+                  onSendContract={() => setErr('Contract flow coming soon')}
+                  onScheduleMeeting={() => setErr('Meeting scheduling coming soon')}
+                />
+              );
+            }
+
+            // System message
+            if (item.message_type === 'system') {
+              return (
+                <View style={s.systemMsg}>
+                  <Text style={s.systemMsgText}>{item.content}</Text>
+                </View>
+              );
+            }
+
+            // Normal message bubble
             const mine = item.sender_id === userId;
             return (
               <View style={[s.bubble, mine ? s.bubbleMine : s.bubbleTheirs]}>
@@ -149,12 +262,19 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
         />
       )}
 
+      {/* Typing indicator */}
+      {typingUser && (
+        <View style={s.typingIndicator}>
+          <Text style={s.typingText}>{typingUser} is typing…</Text>
+        </View>
+      )}
+
       {/* Input */}
       <View style={s.inputRow}>
         <TextInput
           style={s.input}
           value={text}
-          onChangeText={setText}
+          onChangeText={(t) => { setText(t); handleTyping(); }}
           placeholder="Type a message…"
           placeholderTextColor={colors.textMuted}
           multiline
@@ -167,6 +287,25 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
           <Text style={s.sendTxt}>{sending ? '…' : '↑'}</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Unlock Modal */}
+      {showUnlockModal && (
+        <UnlockModal
+          visible={showUnlockModal}
+          partnerName={partnerName}
+          tokenBalance={0}
+          onUnlock={async () => {
+            const result = await unlockConversation(conv.id, jwt);
+            if (result.success) {
+              setShowUnlockModal(false);
+            } else {
+              setErr(result.error ?? 'Failed to unlock');
+            }
+          }}
+          onBuyTokens={() => onBack()}
+          onClose={() => setShowUnlockModal(false)}
+        />
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -182,7 +321,17 @@ const s = StyleSheet.create({
   },
   backBtn: { width: 60 },
   backTxt: { fontSize: 15, color: colors.mint, fontWeight: '600' },
+  headerCenter: { flex: 1, alignItems: 'center' },
   title: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, flex: 1, textAlign: 'center' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  onlineDot: {
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: colors.success,
+    marginRight: 4,
+  },
+  statusText: { fontSize: 13, color: colors.textMuted },
+  headerAction: { width: 40, alignItems: 'center' },
+  headerActionText: { fontSize: 18, color: colors.mint },
   errBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: '#fff5f5', paddingHorizontal: spacing.md, paddingVertical: 8,
@@ -230,4 +379,15 @@ const s = StyleSheet.create({
   },
   sendBtnDisabled: { backgroundColor: colors.mintMid },
   sendTxt: { fontSize: 18, color: '#fff', fontWeight: '700', lineHeight: 22 },
+  typingIndicator: {
+    paddingHorizontal: spacing.md, paddingVertical: 8,
+    backgroundColor: colors.white,
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  typingText: { fontSize: 14, color: colors.textMuted },
+  systemMsg: {
+    padding: 12, borderRadius: 8,
+    backgroundColor: '#eef9ff', marginBottom: 8,
+  },
+  systemMsgText: { fontSize: 14, color: '#31708f', textAlign: 'center' },
 });

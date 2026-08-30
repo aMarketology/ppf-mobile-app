@@ -17,7 +17,3 @@ create index IF not exists idx_messages_conversation on public.messages using bt
 create index IF not exists idx_messages_sender on public.messages using btree (sender_id) TABLESPACE pg_default;
 
 create index IF not exists idx_messages_created on public.messages using btree (created_at desc) TABLESPACE pg_default;
-
-create trigger on_message_created
-after INSERT on messages for EACH row
-execute FUNCTION update_conversation_last_message ();
