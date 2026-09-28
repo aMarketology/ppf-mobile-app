@@ -4,11 +4,14 @@ import {
 } from 'react-native';
 import { colors, radius, spacing } from '../theme';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 type Props = { onNavigate: (screen: string) => void };
 
 export default function ProfileScreen({ onNavigate }: Props) {
   const { user, profile, signOut } = useAuth();
+  const { colors } = useTheme();
+  const s = createStyles(colors);
 
   const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'User';
   const email = user?.email ?? '';
@@ -19,6 +22,7 @@ export default function ProfileScreen({ onNavigate }: Props) {
     .join('') || '?';
   const accountType = profile?.user_type === 'engineer' ? 'Engineer Account' : 'Client Account';
   const tokenBalance = profile?.token_balance ?? 0;
+  const version = 'Precision Project Flow v1.2';
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -108,13 +112,13 @@ export default function ProfileScreen({ onNavigate }: Props) {
         <Text style={s.signOutText}>Sign Out</Text>
       </TouchableOpacity>
 
-      <Text style={s.version}>Precision Project Flow v1.0</Text>
+      <Text style={s.version}>{version}</Text>
       <View style={{ height: 32 }} />
     </ScrollView>
   );
 }
 
-const s = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   centered:  { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   emptyIcon: { fontSize: 48, marginBottom: 12 },
