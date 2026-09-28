@@ -2,17 +2,27 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Start Expo (Android)",
+			"label": "Start Metro",
 			"type": "shell",
-			"command": "cd mobile && npx expo start --android",
+			"command": "npm start",
+			"options": { "cwd": "${workspaceFolder}/PPFMobile" },
 			"isBackground": true,
 			"problemMatcher": []
 		},
 		{
-			"label": "Start Expo Metro",
+			"label": "Run Android (Debug)",
 			"type": "shell",
-			"command": "cd mobile && npx expo start",
-			"isBackground": true,
+			"command": "npm run android",
+			"options": { "cwd": "${workspaceFolder}/PPFMobile" },
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "Start Metro + Attach Android Device",
+			"dependsOn": ["Start Metro"],
+			"type": "shell",
+			"command": "adb reverse tcp:8081 tcp:8081 && adb shell am start -n com.precisionprojectflow.mobile/.MainActivity",
+			"isBackground": false,
 			"problemMatcher": []
 		}
 	]

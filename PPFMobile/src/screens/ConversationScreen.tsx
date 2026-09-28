@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
-  TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform,
+  TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import {
   fetchMessages, sendMessage, fetchProfiles,
@@ -30,6 +30,7 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState('Conversation');
+  const [partnerAvatar, setPartnerAvatar] = useState<string | null>(null);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const listRef = useRef<FlatList>(null);
@@ -46,6 +47,7 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
       .then(profiles => {
         if (profiles.length > 0) {
           setPartnerName(profiles[0].full_name ?? profiles[0].email ?? 'User');
+          setPartnerAvatar(profiles[0].avatar_url ?? null);
         }
       })
       .catch(() => {});
@@ -172,18 +174,31 @@ export default function ConversationScreen({ conv, userId, jwt, onBack }: Props)
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}>
 
-      {/* Header — Slack-style */}
+      {/* Header — with partner avatar + name */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={onBack}>
           <Text style={s.backTxt}>←</Text>
         </TouchableOpacity>
         <View style={s.headerCenter}>
-          <Text style={s.title} numberOfLines={1}>
-            {partnerName}
-          </Text>
-          <View style={s.statusRow}>
-            <View style={s.onlineDot} />
-            <Text style={s.statusText}>Active now</Text>
+          {/* Avatar */}
+          {partnerAvatar ? (
+            <Image source={{ uri: partnerAvatar }} style={s.avatar} />
+          ) : (
+            <View style={[s.avatar, s.avatarFallback]}>
+              <Text style={s.avatarInitial}>
+                {(partnerName[0] ?? '?').toUpperCase()}
+              </Text>
+            </View>
+          )}
+          {/* Name + status */}
+          <View style={s.headerText}>
+            <Text style={s.title} numberOfLines={1}>
+              {partnerName}
+            </Text>
+            <View style={s.statusRow}>
+              <View style={s.onlineDot} />
+              <Text style={s.statusText}>Active now</Text>
+            </View>
           </View>
         </View>
         <TouchableOpacity style={s.headerAction} onPress={() => setShowUnlockModal(true)}>
@@ -315,21 +330,31 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingVertical: 14,
+    paddingHorizontal: spacing.md, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: colors.border,
-    backgroundColor: colors.white,
+    backgroundColor: colors.card,
   },
-  backBtn: { width: 60 },
-  backTxt: { fontSize: 15, color: colors.mint, fontWeight: '600' },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  title: { fontSize: 16, fontWeight: '700', color: colors.textPrimary, flex: 1, textAlign: 'center' },
-  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  backBtn: { width: 40 },
+  backTxt: { fontSize: 18, color: colors.mint, fontWeight: '600' },
+  headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  avatar: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.mintLight,
+  },
+  avatarFallback: {
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.mint,
+  },
+  avatarInitial: { fontSize: 16, fontWeight: '800', color: colors.white },
+  headerText: { alignItems: 'center', maxWidth: '70%' },
+  title: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, textAlign: 'center' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   onlineDot: {
     width: 8, height: 8, borderRadius: 4,
     backgroundColor: colors.success,
     marginRight: 4,
   },
-  statusText: { fontSize: 13, color: colors.textMuted },
+  statusText: { fontSize: 12, color: colors.textMuted },
   headerAction: { width: 40, alignItems: 'center' },
   headerActionText: { fontSize: 18, color: colors.mint },
   errBanner: {

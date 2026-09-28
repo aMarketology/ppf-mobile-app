@@ -1,241 +1,178 @@
 # PPF Mobile App — NEXT STEPS
 ## Implementation Tracker
 
-> Last Updated: February 26, 2026
-> Current Focus: Phase 1 MVP — Auth Flow + Schema Alignment
+> **Last Updated:** September 10, 2026
+> **Current Phase:** Marketplace Launch — Service Detail + DM Flow Complete
+> **Device:** Samsung SM-A156U (Android 15) connected via ADB
+> **Package:** `com.precisionprojectflow.mobile` (changed from `com.ppfmobile`)
 
 ---
 
-## 🔴 IMMEDIATE (Do Now)
+## ✅ COMPLETED FEATURES
 
-### Step 0: Fix Environment & Schema Alignment
-These are blockers for everything else.
+### Auth & Onboarding
+- [x] Auth screen with Sign In / Sign Up toggle
+- [x] Password visibility toggle (eye icon)
+- [x] Keyboard-avoiding scroll view on auth
+- [x] Forgot password flow
+- [x] Session persistence across restarts
+- [x] Sign Out with confirmation dialog
 
-- [x] Supabase credentials added to `.env`
-- [ ] Fix `.env` — move real keys to `EXPO_PUBLIC_` prefix
-- [ ] Align `types/models.ts` with actual `/tables/*.sql` schemas
-- [ ] Align `lib/api.ts` field names with actual column names
-- [ ] Align `hooks/useProducts.ts` field names
+### Navigation & Tab Bar
+- [x] 5-tab layout: Feed, Shop, RFQ, Messages, Profile
+- [x] Lucide icons with Deep Blue active state
+- [x] Tab bar badge for unread messages
 
-**Why:** Our code uses `title`, `active`, `verified` but the DB uses `name`, `is_active`, `is_verified`. This will crash immediately.
+### Activity Feed (Blockchain Ledger)
+- [x] Deep Blue gradient hero matching web design
+- [x] Filter pills (All, RFQs Posted, Offers, Awarded, Orders, etc.)
+- [x] Expandable search bar
+- [x] Activity cards with colored icon pills, actor name, timeAgo
+- [x] SHA256 hash preview + chain link footer
+- [x] Real-time subscription for live updates
+- [x] Load more pagination
+- [x] 3,979 total events on the ledger (live data)
 
----
+### Shop (Marketplace)
+- [x] Services browsing with live data from Supabase (3 live services)
+- [x] Search with category filter pills
+- [x] Price display with provider info
+- [x] **Service Detail View** — full detail page with provider card, stats, tags
+- [x] **Request Quote → auto-create DM** with 75-token deduction
+- [x] **"Post New Service" button** (`+` in hero header)
 
-### Step 1: Full Authentication Flow ← **WE ARE HERE**
-**Screens:** `(auth)/login`, `(auth)/signup`, `(auth)/forgot-password`
-**Files to build/fix:**
+### RFQ Marketplace
+- [x] RFQ browsing with live data (2 open RFQs)
+- [x] Status tags (Open, Awarded, etc.)
+- [x] Create RFQ wizard (4-step: details → budget → line items → review)
+- [x] Submit Offer / Bid with 50-token gating
 
-- [ ] Fix `.env` file (EXPO_PUBLIC_ prefix)
-- [ ] Fix `lib/supabase.ts` to use correct env keys
-- [ ] Fix `lib/auth.ts` — `signUp` must pass `user_type` in metadata correctly
-- [ ] Build `(auth)/login.tsx` — polished, matches design spec
-  - Email + password fields
-  - Error handling with inline messages
-  - "Forgot password" link
-  - "Sign up" link
-  - Loading state on button
-- [ ] Build `(auth)/signup.tsx` — polished, matches design spec
-  - Client vs Engineer type selector (two-button toggle)
-  - Full name, email, password fields
-  - Password strength indicator
-  - Terms acceptance
-  - Error handling
-- [ ] Build `(auth)/forgot-password.tsx`
-  - Email field
-  - Success state (email sent confirmation)
-- [ ] Fix `app/index.tsx` — proper loading gate
-- [ ] Test full flow on device
+### Messaging
+- [x] Conversations list (inbox)
+- [x] Real-time chat with optimistic sends
+- [x] Typing indicator broadcast
+- [x] Mark messages as read
+- [x] Unread counts
+- [x] Token-gated unlock modal (100 tokens to unlock DM)
+- [x] 75-token deduction for new DMs via `spend_tokens` RPC
 
-**Definition of Done:**
-- Real user can sign up → auto-creates `profiles` row in Supabase
-- Real user can log in → lands on Home tab
-- Real user can reset password → receives email
-- Session persists after app restart
-- Signing out returns to login screen
+### Profile & Settings
+- [x] Profile card with avatar initials, name, email, account type
+- [x] Token balance card with "Buy Tokens" link
+- [x] Menu items: Company Profile, Orders, Feed, Messages, Notifications
+- [x] **Company Profile Screen** — view company details, specialties, certifications
+- [x] **Settings Screen** — profile editing (name, bio, location), password change
+- [x] Sign Out with confirmation
 
----
+### Tokens
+- [x] Token balance display in header + profile
+- [x] Token store with pack options
+- [x] Stripe payment integration
+- [x] Balance refreshes after purchase
+- [x] Token-gated features (75 DM, 50 bid, 100 unlock)
 
-## 🟡 NEXT (After Auth Works)
-
-### Step 2: Home / Marketplace Screen
-**File:** `app/(tabs)/index.tsx`
-
-- [ ] Fix `lib/api.ts` field names (name, is_active, etc.)
-- [ ] Fix `components/marketplace/ProductCard.tsx` field names
-- [ ] Fetch and display featured products from Supabase
-- [ ] Fetch and display featured companies from Supabase
-- [ ] Category grid navigates to search with filter pre-set
-- [ ] Search bar navigates to search tab
-- [ ] Skeleton loading states
-- [ ] Pull-to-refresh
-
-### Step 3: Product Detail Screen
-**File:** `app/product/[id].tsx`
-
-- [ ] Full image display (product photo or placeholder)
-- [ ] Company info strip (logo, name, verified badge, rating)
-- [ ] Price display (formatted from cents)
-- [ ] Description
-- [ ] Delivery time
-- [ ] Similar products horizontal scroll
-- [ ] Sticky footer: "Message Vendor" + "Buy Now" buttons
-- [ ] Save/unsave product (heart icon)
-- [ ] Loading skeleton
-
-### Step 4: Search Screen
-**File:** `app/(tabs)/search.tsx`
-
-- [ ] Search input (debounced)
-- [ ] Category filter pills
-- [ ] Price range filter
-- [ ] Sort options
-- [ ] Product grid results
-- [ ] "No results" empty state
-- [ ] Loading skeleton
-
-### Step 5: Company Profile Screen
-**File:** `app/company/[id].tsx`
-
-- [ ] Company header (logo, name, verified badge, rating, location)
-- [ ] About section
-- [ ] Products/services list
-- [ ] Contact info
-- [ ] "Message" CTA
+### Android Build & Deployment
+- [x] Release keystore: `ppf-release.keystore`
+- [x] Package name changed to `com.precisionprojectflow.mobile`
+- [x] AAB built (52MB) — ready for Play Store
+- [x] APK built (73MB) — ready for direct sharing
+- [x] Google Play Developer account created (Account ID: 6012929753643779828)
+- [x] AAB uploaded to Internal Testing track
 
 ---
 
-## 🟢 THEN (Phase 1 Completion)
+## 🔴 NEXT PRIORITIES
 
-### Step 6: Checkout Flow
-**File:** `app/checkout/[id].tsx`
+### 1. Orders Flow (Accept Offer → Create Order)
+- [ ] Build Order Detail screen
+- [ ] Accept offer → create order via RPC
+- [ ] Stripe payment intent creation
+- [ ] Order status tracking (pending → active → completed)
+- [ ] View my orders (client) / view sales (vendor)
 
-- [ ] Order summary
-- [ ] Contact info review
-- [ ] Project notes text area
-- [ ] Stripe Payment Sheet integration
-- [ ] Platform fee calculation (5%)
-- [ ] Total display
-- [ ] Place Order button
-- [ ] Success screen
+### 2. Community Feed (Social Posts)
+- [ ] Feed posts from `feed_posts` table
+- [ ] Like/unlike posts
+- [ ] Comment on posts
+- [ ] Bid on posts (token gated)
+- [ ] Create new post
 
-### Step 7: Orders Screen
-**File:** `app/(tabs)/orders.tsx`
+### 3. Notifications
+- [ ] Notification preferences screen
+- [ ] Notification list
+- [ ] Push notification registration
 
-- [ ] Tab filter: Active / Completed / All
-- [ ] `OrderCard` component
-- [ ] Status badge
-- [ ] Pull-to-refresh
-- [ ] Empty state
-- [ ] Navigate to order detail
-
-### Step 8: Messaging Screen
-**File:** `app/(tabs)/messages.tsx` + `app/conversation/[id].tsx`
-
-- [ ] `ConversationItem` component
-- [ ] Unread count badge
-- [ ] Real-time conversation list
-- [ ] Full chat screen with `MessageBubble`
-- [ ] `ChatInput` component with send button
-- [ ] Real-time messages via Supabase Realtime
-- [ ] Mark as read on open
-
-### Step 9: Profile Screen
-**File:** `app/(tabs)/profile.tsx`
-
-- [ ] Display real profile data from Supabase
-- [ ] Edit profile form
-- [ ] Avatar display (initials fallback)
-- [ ] Sign out with confirmation
-- [ ] Settings section
+### 4. Reviews & Ratings
+- [ ] Star rating on service detail
+- [ ] Review submission
+- [ ] Average rating display
 
 ---
 
-## 🔵 PHASE 2 (After MVP)
+## 🟡 MEDIUM PRIORITY
 
-- [ ] Push notifications (Expo Notifications)
-- [ ] Advanced search filters
-- [ ] Image uploads (product images, avatar)
-- [ ] Document picker for attachments
-- [ ] Biometric login (Face ID)
-- [ ] Saved products / wishlist
-- [ ] Reviews & ratings
+### 5. Polish Remaining Screens
+- [ ] Bring login screen's clean design language to Messages, Profile, Tokens
+- [ ] Consistent card styling across all screens
+- [ ] Loading skeletons instead of spinners
 
----
+### 6. iOS App Store Deployment
+- [ ] Archive in Xcode
+- [ ] Upload to App Store Connect
+- [ ] Set up TestFlight
+- [ ] Add internal testers
 
-## 🔵 PHASE 3 (Advanced)
-
-- [ ] RFQ System
-- [ ] Project management
-- [ ] Analytics dashboard (vendors)
-- [ ] Video consultations
-- [ ] Offline mode
+### 7. Production Readiness
+- [ ] Switch Stripe from test → live keys
+- [ ] Verify all RLS policies are locked down
+- [ ] Set up error monitoring (Sentry)
 
 ---
 
-## 🐛 Known Bugs / Issues to Fix
+## 🟢 LOWER PRIORITY
 
-| # | Issue | File | Priority |
-|---|---|---|---|
-| 1 | `.env` has wrong prefix (`NEXT_PUBLIC_` instead of `EXPO_PUBLIC_`) | `.env` | 🔴 Critical |
-| 2 | `types/models.ts` field names don't match DB schema | `types/models.ts` | 🔴 Critical |
-| 3 | `lib/api.ts` queries wrong column names (`title` vs `name`) | `lib/api.ts` | 🔴 Critical |
-| 4 | `app/(tabs)/_layout.tsx` uses `<span>` (web-only) for tab icons | `_layout.tsx` | 🔴 Critical |
-| 5 | `types/models.ts` Profile missing `avatar_url`, `phone`, `company_name` (not in actual schema) | `types/models.ts` | 🟡 High |
-| 6 | Stripe version mismatch warning | `package.json` | 🟢 Low |
-
----
-
-## 📐 File Status Legend
-
-| Status | Meaning |
-|---|---|
-| ✅ Done | Built and correct |
-| ⚠️ Needs Fix | Built but has bugs / schema mismatch |
-| 🚧 In Progress | Currently being built |
-| 📋 Planned | Next to build |
-| ❌ Blocked | Can't build until dependency done |
+### 8. Additional Features
+- [ ] Dashboard / Analytics
+- [ ] Admin panel
+- [ ] Social login (Google, Apple)
+- [ ] Onboarding walkthrough for new users
+- [ ] Deep linking
+- [ ] File attachments in messages
+- [ ] Voice/video calls
 
 ---
 
-## 🗂️ Current File Status
+## 📋 Testing Status
 
-| File | Status | Notes |
-|---|---|---|
-| `constants/Colors.ts` | ✅ | |
-| `constants/Theme.ts` | ✅ | |
-| `constants/Categories.ts` | ✅ | |
-| `constants/Config.ts` | ✅ | |
-| `types/models.ts` | ⚠️ | Schema mismatch with actual DB |
-| `types/navigation.ts` | ✅ | |
-| `lib/supabase.ts` | ⚠️ | Wrong env var names |
-| `lib/auth.ts` | ⚠️ | Minor fixes needed |
-| `lib/api.ts` | ⚠️ | Wrong column names |
-| `lib/notifications.ts` | ✅ | |
-| `hooks/useProducts.ts` | ⚠️ | Wrong column names |
-| `hooks/useOrders.ts` | ✅ | |
-| `hooks/useMessages.ts` | ✅ | |
-| `contexts/AuthContext.tsx` | ✅ | |
-| `contexts/CartContext.tsx` | ✅ | |
-| `components/ui/Button.tsx` | ✅ | |
-| `components/ui/Card.tsx` | ✅ | |
-| `components/ui/Input.tsx` | ✅ | |
-| `components/ui/Badge.tsx` | ✅ | |
-| `components/marketplace/ProductCard.tsx` | ⚠️ | Wrong field names |
-| `components/marketplace/CompanyCard.tsx` | ⚠️ | Wrong field names |
-| `components/marketplace/CategoryGrid.tsx` | ✅ | |
-| `app/_layout.tsx` | ✅ | |
-| `app/index.tsx` | ✅ | |
-| `app/(tabs)/_layout.tsx` | ⚠️ | Uses `<span>` (web only) |
-| `app/(tabs)/index.tsx` | ⚠️ | Schema mismatch |
-| `app/(tabs)/search.tsx` | 📋 | Placeholder only |
-| `app/(tabs)/messages.tsx` | 📋 | Placeholder only |
-| `app/(tabs)/orders.tsx` | 📋 | Placeholder only |
-| `app/(tabs)/profile.tsx` | ⚠️ | Uses wrong fields |
-| `app/(auth)/login.tsx` | ⚠️ | Needs polish |
-| `app/(auth)/signup.tsx` | ⚠️ | Needs polish |
-| `app/(auth)/forgot-password.tsx` | ⚠️ | Needs polish |
-| `app/product/[id].tsx` | 📋 | Stub only |
+### Device: Samsung SM-A156U (Android 15)
+- ADB connected: ✅ `RZCY21QP0WT`
+- App running: ✅ `com.precisionprojectflow.mobile`
+- Activity feed: ✅ 3,979 events, real-time updates
+- Service detail: ✅ PLC Programming card opens detail view
+- Request Quote CTA: ✅ "Request Quote · 75 tokens" with balance
+- Shop tab: ✅ Shows 3 results with categories
+
+### Test Credentials
+| Account | Email | Password | Tokens |
+|---------|-------|----------|--------|
+| Vendor | `vendor.test@precisionprojectflow.com` | `VendorTest2026!` | 500 |
 
 ---
 
-*Update this file as items are completed.*
+## 🔧 Quick Commands
+
+```bash
+# Build and install debug APK
+cd PPFMobile
+npx react-native bundle --platform android --dev false --entry-file index.js \
+  --bundle-output android/app/src/main/assets/index.android.bundle \
+  --assets-dest android/app/src/main/res
+cd android && ./gradlew assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+
+# Build release AAB (Play Store)
+cd android && ENVFILE=.env.production ./gradlew bundleRelease
+
+# Build release APK (direct sharing)
+cd android && ENVFILE=.env.production ./gradlew assembleRelease
+```

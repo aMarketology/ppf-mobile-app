@@ -28,14 +28,16 @@ export default function ProfileScreen({ onNavigate }: Props) {
   };
 
   const MENU_ITEMS = [
-    { icon: '🏢', label: 'Company Profile', sub: 'Manage your company listing' },
+    { icon: '⚙️', label: 'Settings',         sub: 'Appearance, profile, security', screen: 'Settings' },
+    { icon: '🏢', label: 'Company Profile', sub: 'Manage your company listing', screen: 'CompanyProfile' },
     { icon: '📋', label: 'My Orders',        sub: 'View order history',          screen: 'Orders' },
-    { icon: '�', label: 'Feed',             sub: 'Social feed & updates',       screen: 'Feed' },
+    { icon: '📰', label: 'Feed',             sub: 'Social feed & updates',       screen: 'Feed' },
     { icon: '💬', label: 'Messages',          sub: 'Inbox & conversations',       screen: 'Messages' },
     { icon: '🔔', label: 'Notifications',     sub: 'Manage alerts' },
-    { icon: '🔒', label: 'Security',          sub: 'Password & 2FA' },
+    { icon: '🔒', label: 'Security',          sub: 'Password & 2FA',             screen: 'Settings' },
     { icon: '💳', label: 'Billing',           sub: 'Payment methods & invoices' },
     { icon: '❓', label: 'Help & Support',    sub: 'FAQs and contact us' },
+    { icon: '🧾', label: 'Receipts',          sub: 'Scan & manage expense receipts', screen: 'Receipts' },
   ];
 
   if (!user) {
@@ -62,8 +64,8 @@ export default function ProfileScreen({ onNavigate }: Props) {
         <View style={s.typeBadge}>
           <Text style={s.typeText}>{accountType}</Text>
         </View>
-        <TouchableOpacity style={s.editBtn}>
-          <Text style={s.editBtnText}>Edit Profile</Text>
+        <TouchableOpacity style={s.editBtn} onPress={() => onNavigate('Settings')}>
+          <Text style={s.editBtnText}>Edit Profile / Settings</Text>
         </TouchableOpacity>
       </View>
 

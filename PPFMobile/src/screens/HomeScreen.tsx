@@ -6,12 +6,18 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { fetchActivities } from '../services/activities';
 import { companiesService } from '../services/companies';
+import { createPost } from '../services/feed';
 import { colors, radius, spacing, fonts, shadows } from '../theme';
-import type { SiteActivity, CompanyProfile } from '../lib/types';
+import type { SiteActivity, CompanyProfile, PostType } from '../lib/types';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -86,13 +92,21 @@ const HOW_IT_WORKS = [
 type Props = { onNavigate: (screen: string) => void };
 
 export default function HomeScreen({ onNavigate }: Props) {
-  const { session, profile } = useAuth();
+  const { session, user, profile } = useAuth();
   const jwt = session?.access_token ?? '';
   const tokenBalance = profile?.token_balance ?? 0;
   const [activities, setActivities] = useState<SiteActivity[]>([]);
   const [activitiesLoading, setActivitiesLoading] = useState(false);
   const [featuredCompanies, setFeaturedCompanies] = useState<CompanyProfile[]>([]);
   const [featuredLoading, setFeaturedLoading] = useState(false);
+
+  // Create post modal
+  const [showCreate, setShowCreate] = useState(false);
+  const [postText, setPostText] = useState('');
+  const [postType, setPostType] = useState<string>('update');
+  const [postBudget, setPostBudget] = useState('');
+  const [postDeadline, setPostDeadline] = useState('');
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (!jwt) return;
@@ -141,8 +155,34 @@ export default function HomeScreen({ onNavigate }: Props) {
       }))
     : FEATURED_FALLBACK;
 
+  const handlePostSubmit = async () => {
+    if (!postText.trim()) return;
+    setCreating(true);
+    try {
+      await createPost(
+        jwt,
+        postText.trim(),
+        postType,
+        [],
+        postBudget ? parseFloat(postBudget) : undefined,
+        postDeadline || undefined,
+      );
+      setPostText('');
+      setPostType('update');
+      setPostBudget('');
+      setPostDeadline('');
+      setShowCreate(false);
+      Alert.alert('Posted!', 'Your update is live on the community feed.');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Failed to post. Please try again.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
-    <ScrollView style={s.root} showsVerticalScrollIndicator={false}>
+    <View style={s.root}>
+      <ScrollView showsVerticalScrollIndicator={false}>
 
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <View style={s.hero}>
@@ -158,6 +198,9 @@ export default function HomeScreen({ onNavigate }: Props) {
             <TouchableOpacity style={s.tokenPill} onPress={() => onNavigate('Tokens')} activeOpacity={0.7}>
               <Text style={s.tokenPillIcon}>🪙</Text>
               <Text style={s.tokenPillText}>{tokenBalance}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.postBtn} onPress={() => setShowCreate(true)} activeOpacity={0.7}>
+              <Text style={s.postBtnText}>+</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.loginBtn} onPress={() => onNavigate('Profile')}>
               <Text style={s.loginBtnTxt}>Account</Text>
@@ -405,7 +448,94 @@ export default function HomeScreen({ onNavigate }: Props) {
       </View>
 
       <View style={{ height: 32 }} />
-    </ScrollView>
+      </ScrollView>
+
+      {/* ── Create Post Modal ──────────────────────────────────────────────── */}
+      <Modal visible={showCreate} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCreate(false)}>
+        <KeyboardAvoidingView style={s.modal} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={s.modalHeader}>
+            <TouchableOpacity onPress={() => setShowCreate(false)}>
+              <Text style={s.modalCancel}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={s.modalTitle}>New Post</Text>
+            <TouchableOpacity onPress={handlePostSubmit} disabled={creating || !postText.trim()}>
+              {creating ? (
+                <ActivityIndicator size="small" color={colors.mint} />
+              ) : (
+                <Text style={[s.modalPost, !postText.trim() && s.modalPostDisabled]}>Post</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView contentContainerStyle={s.modalBody} keyboardShouldPersistTaps="handled">
+            {/* Post type selector */}
+            <View style={s.typeRow}>
+              {['update', 'project_showcase', 'milestone', 'parts_request'].map(type => {
+                const labels: Record<string, string> = {
+                  update: '📝 Update',
+                  project_showcase: '🏗️ Project',
+                  milestone: '🏆 Milestone',
+                  parts_request: '🔩 Parts Request',
+                };
+                const isActive = postType === type;
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[s.typeChip, isActive && s.typeChipActive]}
+                    onPress={() => setPostType(type)}
+                  >
+                    <Text style={[s.typeChipText, isActive && s.typeChipTextActive]}>
+                      {labels[type]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Content */}
+            <TextInput
+              style={s.postInput}
+              value={postText}
+              onChangeText={setPostText}
+              placeholder={
+                postType === 'parts_request'
+                  ? "Describe the parts you need...\n\nInclude: material, quantity, tolerances, timeline"
+                  : postType === 'project_showcase'
+                  ? "Share your project...\n\nWhat did you build? What challenges did you overcome?"
+                  : "What's on your mind?"
+              }
+              placeholderTextColor={colors.textMuted}
+              multiline
+              textAlignVertical="top"
+              autoFocus
+            />
+
+            {/* Parts request extras */}
+            {postType === 'parts_request' && (
+              <View style={s.extraFields}>
+                <Text style={s.extraLabel}>Budget ($)</Text>
+                <TextInput
+                  style={s.extraInput}
+                  value={postBudget}
+                  onChangeText={setPostBudget}
+                  placeholder="e.g. 5000"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="decimal-pad"
+                />
+                <Text style={s.extraLabel}>Deadline</Text>
+                <TextInput
+                  style={s.extraInput}
+                  value={postDeadline}
+                  onChangeText={setPostDeadline}
+                  placeholder="e.g. 2 weeks, Dec 15"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
   );
 }
 
@@ -449,6 +579,21 @@ const s = StyleSheet.create({
   },
   tokenPillIcon: { fontSize: 14, marginRight: 4 },
   tokenPillText: { fontFamily: fonts.bold, fontSize: 13, color: colors.textPrimary },
+  postBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.button,
+  },
+  postBtnText: {
+    fontFamily: fonts.bold,
+    fontSize: 22,
+    color: colors.white,
+    lineHeight: 24,
+  },
   loginBtn: {
     backgroundColor: colors.mint,
     borderRadius: radius.full,
@@ -816,5 +961,100 @@ const s = StyleSheet.create({
   },
   eyebrowIcon: {
     fontSize: 12,
+  },
+  modal: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingTop: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.white,
+  },
+  modalCancel: {
+    fontFamily: fonts.medium,
+    fontSize: 16,
+    color: colors.textMuted,
+  },
+  modalTitle: {
+    fontFamily: fonts.bold,
+    fontSize: 17,
+    color: colors.textPrimary,
+  },
+  modalPost: {
+    fontFamily: fonts.bold,
+    fontSize: 16,
+    color: colors.mint,
+  },
+  modalPostDisabled: {
+    opacity: 0.4,
+  },
+  modalBody: {
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  typeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  typeChipActive: {
+    backgroundColor: colors.mint,
+    borderColor: colors.mint,
+  },
+  typeChipText: {
+    fontFamily: fonts.medium,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  typeChipTextActive: {
+    color: colors.white,
+  },
+  postInput: {
+    fontFamily: fonts.regular,
+    fontSize: 16,
+    color: colors.textPrimary,
+    backgroundColor: colors.white,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    minHeight: 160,
+    borderWidth: 1,
+    borderColor: colors.border,
+    textAlignVertical: 'top',
+    lineHeight: 24,
+  },
+  extraFields: {
+    gap: spacing.sm,
+  },
+  extraLabel: {
+    fontFamily: fonts.semiBold,
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+  },
+  extraInput: {
+    fontFamily: fonts.regular,
+    fontSize: 15,
+    color: colors.textPrimary,
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 });

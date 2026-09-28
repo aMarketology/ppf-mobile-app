@@ -562,7 +562,7 @@ const s = StyleSheet.create({
   },
   // Row states
   rowUnread: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: 'rgba(14,165,233,0.12)', // sky-500/12 subtle highlight
   },
   avatarUnread: {
     borderWidth: 2, borderColor: colors.mint,

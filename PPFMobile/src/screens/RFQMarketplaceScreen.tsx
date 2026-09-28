@@ -18,10 +18,11 @@ import {
   ScrollView,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { fetchServices, formatServicePrice, type ServiceWithProvider } from '../services/servicesService';
 import { companiesService } from '../services/companies';
 import { fetchRfqs, type Rfq } from '../services/rfq';
-import { colors, spacing, radius, fonts } from '../theme';
+import { spacing, radius, fonts } from '../theme';
 import type { CompanyProfile } from '../lib/types';
 
 type TabKey = 'services' | 'companies' | 'rfqs';
@@ -39,6 +40,8 @@ type Props = {
 
 export default function MarketplaceScreen({ onNavigate, onSelectRfq }: Props) {
   const { session } = useAuth();
+  const { colors, isDark } = useTheme();
+  const styles = createStyles(colors, isDark);
   const jwt = session?.access_token ?? '';
 
   const [activeTab, setActiveTab] = useState<TabKey>('services');
@@ -192,8 +195,8 @@ export default function MarketplaceScreen({ onNavigate, onSelectRfq }: Props) {
             </Text>
             {item.category && <Text style={styles.cardProvider}>🏷️ {item.category}</Text>}
           </View>
-          <View style={[styles.statusPill, { backgroundColor: item.status === 'open' ? '#D1FAE5' : '#FEF3C7' }]}>
-            <Text style={[styles.statusText, { color: item.status === 'open' ? '#065F46' : '#92400E' }]}>
+          <View style={[styles.statusPill, item.status === 'open' ? styles.statusOpen : styles.statusOther]}>
+            <Text style={[styles.statusText, item.status === 'open' ? styles.statusOpenText : styles.statusOtherText]}>
               {item.status === 'open' ? 'Open' : item.status.replace('_', ' ')}
             </Text>
           </View>
@@ -270,21 +273,23 @@ export default function MarketplaceScreen({ onNavigate, onSelectRfq }: Props) {
 
         {/* Search */}
         <View style={styles.searchWrap}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            value={search}
-            onChangeText={setSearch}
-            placeholder={`Search ${activeTab}...`}
-            placeholderTextColor={colors.textMuted}
-            returnKeyType="search"
-            onSubmitEditing={() => load()}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => { setSearch(''); }}>
-              <Text style={styles.clearBtn}>✕</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.searchBox}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder={`Search ${activeTab}...`}
+              placeholderTextColor={colors.textMuted}
+              returnKeyType="search"
+              onSubmitEditing={() => load()}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => { setSearch(''); }}>
+                <Text style={styles.clearBtn}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Tabs */}
@@ -359,29 +364,29 @@ export default function MarketplaceScreen({ onNavigate, onSelectRfq }: Props) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bg },
-  listContent: { paddingBottom: spacing.xxl },
+  listContent: { paddingBottom: 24 },
 
   // Hero
   heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.white,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    backgroundColor: colors.card,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  heroTitle: { fontFamily: fonts.bold, fontSize: 22, color: colors.textPrimary },
+  heroTitle: { fontFamily: fonts.bold, fontSize: 20, color: colors.textPrimary },
   heroSub: { fontFamily: fonts.regular, fontSize: 13, color: colors.textMuted, marginTop: 4 },
   postRfqBtn: {
     backgroundColor: colors.accent,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: radius.md,
   },
   postRfqBtnText: {
@@ -391,36 +396,40 @@ const styles = StyleSheet.create({
   },
 
   // Search
-  searchWrap: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.white },
+  searchWrap: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: colors.card },
   searchBox: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.bg, borderRadius: radius.lg,
-    paddingHorizontal: spacing.sm + 4, height: 42,
+    backgroundColor: colors.bg, borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 10,
     borderWidth: 1, borderColor: colors.border,
   },
-  searchIcon: { fontSize: 14, marginRight: spacing.xs + 2 },
+  searchIcon: { fontSize: 14, marginRight: 8 },
   searchInput: { flex: 1, fontFamily: fonts.regular, fontSize: 14, color: colors.textPrimary },
-  clearBtn: { fontSize: 16, color: colors.textMuted, padding: 4 },
+  clearBtn: { fontSize: 14, color: colors.textMuted, paddingLeft: 8 },
 
   // Tabs
   tabRow: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: colors.card,
     borderBottomWidth: 1, borderBottomColor: colors.border,
+    gap: 8,
   },
   tab: {
     flexDirection: 'row', alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.md,
-    marginRight: spacing.md,
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  tabActive: { backgroundColor: colors.mintLight },
-  tabIcon: { fontSize: 16, marginRight: spacing.xs },
-  tabLabel: { fontFamily: fonts.semiBold, fontSize: 14, color: colors.textPrimary },
-  tabLabelActive: { color: colors.mintDark },
+  tabActive: { backgroundColor: colors.mint, borderColor: colors.mint },
+  tabIcon: { fontSize: 12 },
+  tabLabel: { fontFamily: fonts.semiBold, fontSize: 12, color: colors.textSecondary },
+  tabLabelActive: { color: colors.white },
 
   // Empty
   empty: { alignItems: 'center', paddingTop: spacing.xxl, paddingHorizontal: spacing.xl },
@@ -430,13 +439,11 @@ const styles = StyleSheet.create({
 
   // Service Card
   card: {
-    marginHorizontal: spacing.md,
-    marginTop: spacing.sm + 4,
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.md,
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   cardTop: {
     flexDirection: 'row',
@@ -463,12 +470,14 @@ const styles = StyleSheet.create({
     lineHeight: 18, marginBottom: spacing.sm,
   },
 
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.sm },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.sm },
   tag: {
-    backgroundColor: colors.bg,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    backgroundColor: colors.card,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tagText: { fontFamily: fonts.medium, fontSize: 11, color: colors.textSecondary },
 
@@ -557,4 +566,8 @@ const styles = StyleSheet.create({
   statusText: {
     fontFamily: fonts.semiBold, fontSize: 12,
   },
+  statusOpen: { backgroundColor: isDark ? 'rgba(16,185,129,0.18)' : '#D1FAE5' },
+  statusOpenText: { color: isDark ? '#34D399' : '#065F46' },
+  statusOther: { backgroundColor: isDark ? 'rgba(245,158,11,0.18)' : '#FEF3C7' },
+  statusOtherText: { color: isDark ? '#FBBF24' : '#92400E' },
 });

@@ -7,6 +7,7 @@ export interface Profile {
   bio: string | null;
   location: string | null;
   avatar_url: string | null;
+  company_id: string | null;
   created_at: string;
   token_balance: number;
 }
@@ -41,6 +42,9 @@ export interface Service {
   category: string | null;
   tags: string[] | null;
   active: boolean;
+  delivery_time?: string | null;
+  service_area?: string | null;
+  images?: string[] | null;
   created_at: string;
   // joined
   provider?: Profile;

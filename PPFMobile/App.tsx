@@ -12,26 +12,38 @@ import TokenScreen from './src/screens/TokenScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import TabBar from './src/components/TabBar';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { colors } from './src/theme';
 import { ENV } from './src/config/env';
 import ActivityFeedScreen from './src/screens/ActivityFeedScreen';
 import RFQMarketplaceScreen from './src/screens/RFQMarketplaceScreen';
 import CreateRFQScreen from './src/screens/CreateRFQScreen';
 import SubmitOfferScreen from './src/screens/SubmitOfferScreen';
+import PostServiceScreen from './src/screens/PostServiceScreen';
+import CompanyProfileScreen from './src/screens/CompanyProfileScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import ServiceDetailScreen from './src/screens/ServiceDetailScreen';
+import ReceiptsScreen from './src/screens/ReceiptsScreen';
+import ScanReceiptScreen from './src/screens/ScanReceiptScreen';
+import UserProfileScreen from './src/screens/UserProfileScreen';
+import type { ServiceWithProvider } from './src/services/servicesService';
 
 const STRIPE_PK = ENV.STRIPE_PUBLISHABLE_KEY;
 
 function AppContent() {
   const { session, loading } = useAuth();
+  const { isDark, colors: themeColors } = useTheme();
   const [activeTab, setActiveTab] = useState('Activity');
   const [selectedRfq, setSelectedRfq] = useState<any>(null);
+  const [selectedService, setSelectedService] = useState<ServiceWithProvider | null>(null);
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
 
   if (loading) {
     return (
-      <View style={styles.splash}>
-        <ActivityIndicator size="large" color={colors.mint} />
-        <Text style={styles.splashText}>Loading...</Text>
+      <View style={[styles.splash, { backgroundColor: themeColors.bg }]}>
+        <ActivityIndicator size="large" color={themeColors.mint} />
+        <Text style={[styles.splashText, { color: themeColors.textMuted }]}>Loading...</Text>
       </View>
     );
   }
@@ -42,8 +54,8 @@ function AppContent() {
 
   const renderScreen = () => {
     switch (activeTab) {
-      case 'Activity':    return <ActivityFeedScreen onNavigate={setActiveTab} />;
-      case 'Shop':        return <MarketplaceScreen onNavigate={setActiveTab} />;
+      case 'Activity':    return <ActivityFeedScreen onNavigate={setActiveTab} onOpenProfile={(uid) => { setViewingUserId(uid); setActiveTab('UserProfile'); }} />;
+      case 'Shop':        return <MarketplaceScreen onNavigate={setActiveTab} onOpenService={(svc) => { setSelectedService(svc); setActiveTab('ServiceDetail'); }} />;
       case 'RFQ':         return <RFQMarketplaceScreen onNavigate={setActiveTab} onSelectRfq={setSelectedRfq} />;
       case 'Feed':        return <FeedScreen onNavigate={setActiveTab} />;
       case 'Messages':    return <MessagesScreen onNavigate={setActiveTab} />;
@@ -53,13 +65,20 @@ function AppContent() {
       case 'Tokens':      return <TokenScreen onBack={() => setActiveTab('Profile')} />;
       case 'CreateRFQ':   return <CreateRFQScreen onBack={() => setActiveTab('RFQ')} onNavigate={setActiveTab} />;
       case 'SubmitOffer': return selectedRfq ? <SubmitOfferScreen rfq={selectedRfq} onBack={() => setActiveTab('RFQ')} onNavigate={setActiveTab} /> : <RFQMarketplaceScreen onNavigate={setActiveTab} onSelectRfq={setSelectedRfq} />;
+      case 'PostService': return <PostServiceScreen onBack={() => setActiveTab('Shop')} onNavigate={setActiveTab} />;
+      case 'CompanyProfile': return <CompanyProfileScreen onBack={() => setActiveTab('Profile')} onNavigate={setActiveTab} />;
+      case 'Settings':    return <SettingsScreen onBack={() => setActiveTab('Profile')} onNavigate={setActiveTab} />;
+      case 'ServiceDetail': return selectedService ? <ServiceDetailScreen service={selectedService} onBack={() => setActiveTab('Shop')} onNavigate={setActiveTab} /> : <MarketplaceScreen onNavigate={setActiveTab} />;
+      case 'Receipts':    return <ReceiptsScreen onNavigate={setActiveTab} />;
+      case 'ScanReceipt': return <ScanReceiptScreen onBack={() => setActiveTab('Receipts')} onNavigate={setActiveTab} />;
+      case 'UserProfile': return viewingUserId ? <UserProfileScreen userId={viewingUserId} onBack={() => setActiveTab('Activity')} /> : <ActivityFeedScreen onNavigate={setActiveTab} />;
       default:            return <ActivityFeedScreen onNavigate={setActiveTab} />;
     }
   };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
+    <View style={[styles.root, { backgroundColor: themeColors.bg, paddingTop: insets.top }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={themeColors.bg} />
       <View style={styles.screen}>{renderScreen()}</View>
       <TabBar activeTab={activeTab} onTabPress={setActiveTab} unreadMessages={0} />
     </View>
@@ -69,11 +88,13 @@ function AppContent() {
 function App() {
   return (
     <SafeAreaProvider>
-      <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.maxdeleonardis.precisionprojectflow">
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
-      </StripeProvider>
+      <ThemeProvider>
+        <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.maxdeleonardis.precisionprojectflow">
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </StripeProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
@@ -81,8 +102,8 @@ function App() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   screen: { flex: 1 },
-  splash: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
-  splashText: { marginTop: 12, fontSize: 14, color: colors.textMuted },
+  splash: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  splashText: { marginTop: 12, fontSize: 14 },
 });
 
 export default App;

@@ -1,38 +1,40 @@
 # 📊 Precision Project Flow — Deployment Progress
 
-**Last Updated:** May 28, 2026  
+**Last Updated:** September 10, 2026  
 **App Version:** 1.0.0  
-**Framework:** React Native 0.84.1
+**Framework:** React Native 0.84.1 (New Architecture — Fabric)
+**Package:** `com.precisionprojectflow.mobile`
 
 ---
 
 ## ✅ Completed
 
-### iOS Build
-- [x] React Native iOS archive built successfully (`PPFMobile.xcarchive`)
-- [x] iPad icons added (152×152 and 167×167) — fixed App Store validation errors
-- [x] App Store Connect app created: **"Precision Project Flow2"**
-- [x] Bundle ID: `com.maxdeleonardis.precisionprojectflow`
-- [x] Apple Developer Team: Max Deleonardis (VT82GSPGZ4)
-- [x] Archive copied to `~/Library/Developer/Xcode/Archives/2026-05-27/`
+### Core App Features
+- [x] **Auth** — Sign in, Sign up, Forgot password, Session persistence
+- [x] **5-Tab Navigation** — Feed, Shop, RFQ, Messages, Profile (Lucide icons)
+- [x] **Activity Feed** — Blockchain ledger with real-time updates, filters, search (3,979 events)
+- [x] **Shop** — Services browsing, search, category filters, service detail view
+- [x] **RFQ Marketplace** — Browse RFQs, 4-step create wizard, submit bid (50-token gated)
+- [x] **Messaging** — Real-time DM, typing indicators, unread badges, token-gated unlock
+- [x] **Profile** — User info, token balance, company profile, settings (edit profile, change password)
+- [x] **Tokens** — Balance display, token store with Stripe purchase, spend integration
+- [x] **Service Detail** — Full detail view with provider card, stats, tags, Request Quote CTA
+- [x] **Request Quote → Auto-DM** — 75-token deduction for new conversations via `spend_tokens` RPC
+- [x] **Post New Service** — Create service listing form with company ownership check
 
 ### Android Build
-- [x] Java 17 (OpenJDK via Homebrew) installed and configured
-- [x] Android SDK installed (`/opt/homebrew/share/android-commandlinetools`)
-  - platform-tools, platforms;android-35, build-tools;35.0.0, CMake 3.22.1, NDK 27.1.12297006
 - [x] Release keystore generated: `android/app/ppf-release.keystore`
   - Alias: `ppf-key-alias` | Password: stored in `gradle.properties`
-- [x] Release APK built and signed: `app-release.apk` (66MB)
-- [x] Android App Bundle (AAB) built: `app-release.aab` (49MB) — ready for Play Store
-- [x] Android emulator created: PPF_Test (Pixel 8 Pro, Android 35)
-- [x] App installed and launched successfully on emulator
-- [x] AsyncStorage downgraded 3.0.1 → 2.0.0 to fix Android build dependency error
+- [x] Release APK built and signed: `app-release.apk` (73MB)
+- [x] Android App Bundle (AAB) built: `app-release.aab` (52MB)
+- [x] Package name changed from `com.ppfmobile` → `com.precisionprojectflow.mobile`
+- [x] App installed and launched successfully on physical device (SM-A156U)
 
 ### Backend & Infrastructure
 - [x] Supabase production backend connected (`ifrxzmemiihxfdimwvcw.supabase.co`)
 - [x] Stripe integration configured (test keys active)
 - [x] Push notification edge functions deployed
-- [x] All Supabase edge functions in place (notify-*, purchase-tokens, stripe-webhook)
+- [x] All RPC functions wired: `spend_tokens`, `get_or_create_conversation`, `submit_rfq_offer`
 
 ---
 
@@ -40,67 +42,24 @@
 
 ### Google Play Store
 - [ ] **Google Play Developer Account registered** — Account ID: `6012929753643779828`
-- [ ] Pending verifications to unlock publishing:
-  - [ ] Verify contact phone number
-  - [ ] Verify identity (government ID upload)
-  - [ ] Verify Android device access (requires physical Android device — coworker's phone)
+- [ ] Pending verifications to unlock publishing (phone, identity, device)
 - [ ] Once verified: Upload `app-release.aab` to Internal Testing track
 
 ### iOS TestFlight
-- [ ] Upload iOS archive via Xcode Organizer → Distribute App → App Store Connect
-- [ ] Apple processing time: ~30-60 minutes
-- [ ] Add internal testers in App Store Connect TestFlight tab
+- [ ] Archive in Xcode and upload to App Store Connect
 
 ---
 
-## 🔲 Pending
+## 🔜 Next Up
 
-### Google Play Store Full Launch
-- [ ] Complete store listing (title, description, screenshots, icon 512×512)
-- [ ] Content rating questionnaire
-- [ ] Submit for review (1-3 business days for first submission)
-- [ ] Add coworker as internal tester
+### 1. Orders Flow
+- Accept bid → create order → Stripe payment → status tracking
 
-### iOS App Store Full Launch
-- [ ] Complete App Store listing metadata
-- [ ] Submit for App Store review (~24-48 hours)
-- [ ] Set pricing and availability
+### 2. Community Feed
+- Social posts, comments, likes, bids (from `feed_posts` table)
 
-### Both Platforms
-- [ ] Switch Stripe keys from test → production
-- [ ] Set up crash reporting (Sentry or Firebase Crashlytics)
-- [ ] Set up analytics
-- [ ] Configure production push notifications
+### 3. Notifications
+- Preferences, notification list, push registration
 
----
-
-## 📁 Key File Locations
-
-| Asset | Path |
-|-------|------|
-| iOS Archive | `~/Library/Developer/Xcode/Archives/2026-05-27/PPFMobile.xcarchive` |
-| Android APK | `PPFMobile/android/app/build/outputs/apk/release/app-release.apk` |
-| Android AAB | `PPFMobile/android/app/build/outputs/bundle/release/app-release.aab` |
-| Android Keystore | `PPFMobile/android/app/ppf-release.keystore` |
-| Keystore Credentials | `PPFMobile/android/gradle.properties` |
-
----
-
-## 🔑 Accounts & Credentials
-
-| Service | Account | Details |
-|---------|---------|---------|
-| Apple Developer | Max Deleonardis | Team ID: VT82GSPGZ4 |
-| App Store Connect | max@amarketology.com | App: "Precision Project Flow2" |
-| Google Play | Precisionprojectflow.com | Account ID: 6012929753643779828 |
-| Supabase | Production | ifrxzmemiihxfdimwvcw.supabase.co |
-| Stripe | Test mode | pk_test_* |
-
----
-
-## ⚠️ Important Notes
-
-- **Android keystore (`ppf-release.keystore`) must be backed up securely** — if lost, you cannot update the app on Play Store
-- Stripe is currently in **test mode** — must switch to live keys before public launch
-- `gradle.properties` contains keystore passwords — **do not commit to public repos**
-- Google Play requires a **physical Android device** for initial account verification (one-time only)
+### 4. Reviews & Ratings
+- Star ratings on service detail pages

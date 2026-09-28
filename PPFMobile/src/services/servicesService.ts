@@ -1,6 +1,7 @@
 // Services service — raw fetch, no supabase-js client (hangs in iOS simulator)
 import type { Service, Profile } from '../lib/types';
-import { restGet } from '../lib/restClient';
+import { restGet, restPost } from '../lib/restClient';
+import { ENV } from '../config/env';
 
 export interface ServiceWithProvider extends Service {
   provider?: Profile;
@@ -77,4 +78,93 @@ export async function fetchServiceById(jwt: string, id: string): Promise<Service
 export function formatServicePrice(price: number): string {
   // DB stores as numeric; treat as dollars
   return `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/**
+ * Upload a base64 data-URI image to Supabase Storage ('service-images' bucket)
+ * and return its public URL.
+ */
+export async function uploadServiceImage(jwt: string, userId: string, dataUri: string): Promise<string | null> {
+  try {
+    const matches = dataUri.match(/^data:([^;]+);base64,(.+)$/);
+    if (!matches) return null;
+    const contentType = matches[1];
+    const base64Data = matches[2];
+    const ext = contentType.split('/')[1] || 'jpg';
+    const filename = `${userId}/${Date.now()}.${ext}`;
+
+    const res = await fetch(`${ENV.SUPABASE_URL}/storage/v1/object/service-images/${filename}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': contentType,
+        Authorization: `Bearer ${jwt}`,
+        apikey: ENV.SUPABASE_ANON_KEY,
+      },
+      body: Uint8Array.from(atobPolyfill(base64Data), c => c.charCodeAt(0)),
+    });
+    if (!res.ok) {
+      console.warn('[services] image upload failed:', await res.text());
+      return null;
+    }
+    return `${ENV.SUPABASE_URL}/storage/v1/object/public/service-images/${filename}`;
+  } catch (e) {
+    console.warn('[services] image upload error:', e);
+    return null;
+  }
+}
+
+// Minimal base64 decoder (matches feed.ts b64decode)
+function atobPolyfill(str: string): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const s = str.replace(/-/g, '+').replace(/_/g, '/');
+  let output = '';
+  let buffer = 0;
+  let bits = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '=') break;
+    const v = chars.indexOf(c);
+    if (v === -1) continue;
+    buffer = (buffer << 6) | v;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      output += String.fromCharCode((buffer >> bits) & 0xff);
+    }
+  }
+  return output;
+}
+
+/** Create a new service listing */
+export async function createService(
+  jwt: string,
+  data: {
+    provider_id: string;
+    title: string;
+    description: string;
+    price: number;
+    category: string;
+    tags?: string[];
+    delivery_time?: string;
+    service_area?: string;
+    images?: string[];
+  },
+): Promise<Service> {
+  const result = await restPost<Service[]>(
+    'services?select=*',
+    {
+      provider_id: data.provider_id,
+      title: data.title,
+      description: data.description,
+      price: data.price,
+      category: data.category,
+      tags: data.tags ?? [],
+      delivery_time: data.delivery_time ?? null,
+      service_area: data.service_area ?? 'remote',
+      images: data.images ?? [],
+      active: true,
+    },
+    jwt,
+  );
+  return result[0];
 }

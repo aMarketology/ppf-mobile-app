@@ -295,3 +295,47 @@ export async function unlockConversation(
     return { success: false, error: e?.message ?? 'Failed to unlock conversation' };
   }
 }
+
+// ── Token-Gated Conversation Creation ────────────────────────────────────────
+
+/**
+ * Create or find a DM conversation with another user.
+ * If a new conversation is created, 75 tokens are deducted via spend_tokens RPC.
+ * Returns the conversation ID and whether tokens were charged.
+ */
+export async function createConversation(
+  jwt: string,
+  otherUserId: string,
+): Promise<{ conversation_id: string; charged: boolean }> {
+  // 1. Get or create the conversation
+  const convId = await restRpc<string>(
+    'get_or_create_conversation',
+    { user_one_id: otherUserId, user_two_id: otherUserId },
+    jwt,
+  );
+  const id = typeof convId === 'string' ? convId.replace(/"/g, '') : String(convId);
+
+  // 2. Check if this is a new conversation (no messages yet)
+  const msgs = await restGet<any[]>(
+    `user_messages?select=id&conversation_id=eq.${id}&limit=1`,
+    jwt,
+  );
+
+  const isNew = msgs.length === 0;
+
+  // 3. If new, deduct 75 tokens
+  if (isNew) {
+    const result = await restRpc<any>('spend_tokens', {
+      p_user_id: otherUserId,
+      p_amount: 75,
+      p_description: 'New direct message conversation',
+      p_reference_id: id,
+    }, jwt);
+
+    if (result === 'insufficient_tokens') {
+      throw new Error('Insufficient tokens. You need 75 tokens to start a new conversation.');
+    }
+  }
+
+  return { conversation_id: id, charged: isNew };
+}
