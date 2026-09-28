@@ -4,11 +4,12 @@ import {
   TouchableOpacity, ActivityIndicator, Modal, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import {
   fetchConversations, searchUsers, getOrCreateConversation, fetchProfiles,
   fetchUnreadCount, type Conv, type UserResult,
 } from '../services/messages';
-import { colors, spacing, radius, fonts } from '../theme';
+import { spacing, radius, fonts } from '../theme';
 import ConversationScreen from './ConversationScreen';
 
 type SectionTab = 'all' | 'channels' | 'groups' | 'dms';
@@ -17,6 +18,8 @@ type Props = { onNavigate: (screen: string) => void };
 
 export default function MessagesScreen({ onNavigate }: Props) {
   const { user, session, profile } = useAuth();
+  const { colors } = useTheme();
+  const s = createStyles(colors);
   const jwt = session?.access_token ?? '';
   const tokenBalance = profile?.token_balance ?? 0;
 
@@ -181,14 +184,16 @@ export default function MessagesScreen({ onNavigate }: Props) {
 
       {/* Search conversations */}
       <View style={s.convSearchWrap}>
-        <Text style={s.convSearchIcon}>🔍</Text>
-        <TextInput
-          style={s.convSearchInput}
-          value={convSearch}
-          onChangeText={setConvSearch}
-          placeholder="Search conversations..."
-          placeholderTextColor={colors.textMuted}
-        />
+        <View style={s.convSearchBox}>
+          <Text style={s.convSearchIcon}>🔍</Text>
+          <TextInput
+            style={s.convSearchInput}
+            value={convSearch}
+            onChangeText={setConvSearch}
+            placeholder="Search conversations..."
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
       </View>
 
       {/* Section Tabs — Slack-style */}
@@ -231,7 +236,7 @@ export default function MessagesScreen({ onNavigate }: Props) {
             return true;
           })}
           keyExtractor={item => item.id}
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={{ paddingBottom: 24 }}
           renderItem={({ item }) => {
             const partnerId = item.participant_one_id === user?.id
               ? item.participant_two_id
@@ -382,16 +387,17 @@ function formatTime(dateStr: string): string {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-const s = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   root:        { flex: 1, backgroundColor: colors.bg },
   center:      { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   header:      {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10,
+    backgroundColor: colors.card,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  title:       { fontSize: 24, fontWeight: '800', color: colors.textPrimary },
-  subtitle:    { fontSize: 14, color: colors.textMuted, marginTop: 4 },
+  title:       { fontFamily: fonts.bold, fontSize: 20, color: colors.textPrimary },
+  subtitle:    { fontFamily: fonts.regular, fontSize: 13, color: colors.textMuted, marginTop: 4 },
   muted:       { fontSize: 14, color: colors.textMuted, marginTop: 8, textAlign: 'center' },
   errText:     { fontSize: 13, color: '#e53e3e', textAlign: 'center', marginBottom: 16 },
   emptyTitle:  { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginTop: 8, marginBottom: 4 },
@@ -508,24 +514,30 @@ const s = StyleSheet.create({
   // Section Tabs
   sectionTabs: {
     flexDirection: 'row',
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: colors.card,
     borderBottomWidth: 1, borderBottomColor: colors.border,
+    gap: 8,
   },
   sectionTab: {
-    flex: 1, alignItems: 'center', paddingVertical: spacing.sm,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: colors.bg,
+    borderWidth: 1, borderColor: colors.border,
   },
   sectionTabActive: {
-    borderBottomWidth: 2, borderBottomColor: colors.mint,
+    backgroundColor: colors.mint, borderColor: colors.mint,
   },
   sectionTabIcon: {
-    fontSize: 16, marginBottom: 2,
+    fontSize: 12,
   },
   sectionTabText: {
-    fontSize: 11, fontFamily: fonts.medium, color: colors.textMuted,
+    fontSize: 12, fontFamily: fonts.semiBold, color: colors.textSecondary,
   },
   sectionTabTextActive: {
-    color: colors.mintDark, fontFamily: fonts.semiBold,
+    color: colors.white,
   },
   // Header
   headerRight: {
@@ -572,13 +584,18 @@ const s = StyleSheet.create({
   },
   // Search conversations
   convSearchWrap: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    backgroundColor: colors.white,
+    paddingHorizontal: 16, paddingVertical: 10,
+    backgroundColor: colors.card,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
+  convSearchBox: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: colors.bg, borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 10,
+    borderWidth: 1, borderColor: colors.border,
+  },
   convSearchIcon: {
-    fontSize: 14, marginRight: spacing.sm, color: colors.textMuted,
+    fontSize: 14, marginRight: 8, color: colors.textMuted,
   },
   convSearchInput: {
     flex: 1, fontSize: 14, fontFamily: fonts.regular, color: colors.textPrimary,
