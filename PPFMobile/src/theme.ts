@@ -24,6 +24,11 @@ export const darkColors = {
   accentHover:  '#38BDF8',
   accentLight:  '#1E293B',
 
+  // Brand orange — primary CTA / center action button
+  orange:       '#FF6B35',
+  orangeDark:   '#E55A2B',
+  orangeLight:  'rgba(255,107,53,0.15)',
+
   bg:           '#080808',  // page base
   white:        '#1E293B',  // card surface
   textPrimary:  '#F8FAFC',  // slate-50
@@ -50,6 +55,11 @@ export const lightColors = {
   accent:       '#0EA5E9',
   accentHover:  '#0284C7',
   accentLight:  '#E0F2FE',
+
+  // Brand orange — primary CTA / center action button
+  orange:       '#FF6B35',
+  orangeDark:   '#E55A2B',
+  orangeLight:  'rgba(255,107,53,0.15)',
 
   bg:           '#F8FAFC',  // page base
   white:        '#FFFFFF',  // card surface

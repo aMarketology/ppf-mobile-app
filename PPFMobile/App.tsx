@@ -80,7 +80,17 @@ function AppContent() {
     <View style={[styles.root, { backgroundColor: themeColors.bg, paddingTop: insets.top }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={themeColors.bg} />
       <View style={styles.screen}>{renderScreen()}</View>
-      <TabBar activeTab={activeTab} onTabPress={setActiveTab} unreadMessages={0} />
+      <TabBar
+        activeTab={activeTab}
+        onTabPress={setActiveTab}
+        unreadMessages={0}
+        onCreatePress={(action) => {
+          // Center + button → create action sheet
+          if (action === 'PostService') setActiveTab('PostService');
+          else if (action === 'CreateRFQ') setActiveTab('CreateRFQ');
+          else if (action === 'ScanReceipt') setActiveTab('ScanReceipt');
+        }}
+      />
     </View>
   );
 }
