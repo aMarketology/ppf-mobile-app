@@ -26,9 +26,11 @@ interface Receipt {
   transaction_date: string | null;
   total_amount: number | null;
   status: string;
+  review_status: string | null;
   job_number: string | null;
   cost_code: string | null;
   cost_code_desc: string | null;
+  category: string | null;
   notes: string | null;
   created_at: string;
 }
@@ -52,7 +54,7 @@ export default function ReceiptsScreen({ onNavigate }: Props) {
     try {
       isRefresh ? setRefreshing(true) : setLoading(true);
       const data = await restGet<Receipt[]>(
-        `receipts?select=id,vendor_name,transaction_date,total_amount,status,job_number,cost_code,cost_code_desc,notes,created_at&order=created_at.desc`,
+        `receipts?select=id,vendor_name,transaction_date,total_amount,status,review_status,job_number,cost_code,cost_code_desc,category,notes,created_at&order=created_at.desc`,
         jwt,
       );
       setReceipts(data || []);
@@ -83,6 +85,24 @@ export default function ReceiptsScreen({ onNavigate }: Props) {
       case 'pending': return '#D97706';
       case 'rejected': return '#DC2626';
       default: return '#6B7280';
+    }
+  }
+
+  function reviewStatusColor(status: string | null): string {
+    switch (status) {
+      case 'approved': return '#059669';
+      case 'rejected': return '#DC2626';
+      case 'pending': return '#D97706';
+      default: return '#6B7280';
+    }
+  }
+
+  function reviewStatusLabel(status: string | null): string {
+    switch (status) {
+      case 'approved': return '✓ Approved';
+      case 'rejected': return '✕ Rejected';
+      case 'pending': return '⏳ Pending Review';
+      default: return '—';
     }
   }
 
@@ -144,16 +164,17 @@ export default function ReceiptsScreen({ onNavigate }: Props) {
                 </View>
                 <View style={styles.cardRight}>
                   <Text style={styles.amount}>{formatAmount(item.total_amount)}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: statusColor(item.status) + '20' }]}>
-                    <Text style={[styles.statusText, { color: statusColor(item.status) }]}>
-                      {item.status}
+                  <View style={[styles.statusBadge, { backgroundColor: reviewStatusColor(item.review_status) + '20' }]}>
+                    <Text style={[styles.statusText, { color: reviewStatusColor(item.review_status) }]}>
+                      {reviewStatusLabel(item.review_status)}
                     </Text>
                   </View>
                 </View>
               </View>
-              {(item.cost_code || item.notes) && (
+              {(item.cost_code || item.category || item.notes) && (
                 <View style={styles.cardBottom}>
                   {item.cost_code && <Text style={styles.costCode}>📋 Code: {item.cost_code}</Text>}
+                  {item.category && <Text style={styles.costCode}>🏷️ {item.category}</Text>}
                   {item.notes && <Text style={styles.notesText} numberOfLines={2}>📝 {item.notes}</Text>}
                 </View>
               )}

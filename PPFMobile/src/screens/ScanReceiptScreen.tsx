@@ -43,7 +43,7 @@ interface ParsedReceipt {
 }
 
 export default function ScanReceiptScreen({ onBack, onNavigate, autoLaunch = false }: Props) {
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const { colors } = useTheme();
   const jwt = session?.access_token ?? '';
   const styles = createStyles(colors);
@@ -61,6 +61,7 @@ export default function ScanReceiptScreen({ onBack, onNavigate, autoLaunch = fal
   const [transactionDate, setTransactionDate] = useState('');
   const [jobNumber, setJobNumber] = useState('');
   const [costCode, setCostCode] = useState('');
+  const [category, setCategory] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -192,8 +193,11 @@ export default function ScanReceiptScreen({ onBack, onNavigate, autoLaunch = fal
             transaction_date: transactionDate || null,
             job_number: jobNumber.trim() || null,
             cost_code: costCode.trim() || null,
+            category: category.trim() || null,
+            company_id: profile?.company_id || null,
             notes: notes.trim() || null,
             status: 'processed',
+            review_status: 'pending',
           }),
         });
       } else {
@@ -218,15 +222,23 @@ export default function ScanReceiptScreen({ onBack, onNavigate, autoLaunch = fal
             transaction_date: transactionDate || new Date().toISOString().split('T')[0],
             job_number: jobNumber.trim() || null,
             cost_code: costCode.trim() || null,
+            category: category.trim() || null,
+            company_id: profile?.company_id || null,
             notes: notes.trim() || null,
             status: 'processed',
+            review_status: 'pending',
           }),
         });
       }
 
-      Alert.alert('Saved!', 'Receipt allocated and saved successfully.', [
-        { text: 'View Receipts', onPress: () => onNavigate('Receipts') },
-      ]);
+      Alert.alert(
+        '✅ Sent to Back Office',
+        'Receipt saved and sent to your back office for review. They can approve it and allocate it to a job.',
+        [
+          { text: 'View Receipts', onPress: () => onNavigate('Receipts') },
+          { text: 'Scan Another', onPress: () => { setResult(null); setImageUri(null); setImageBase64(null); } },
+        ],
+      );
     } catch (saveErr: any) {
       Alert.alert('Save Error', saveErr?.message || 'Could not save receipt.');
     } finally {
@@ -334,6 +346,15 @@ export default function ScanReceiptScreen({ onBack, onNavigate, autoLaunch = fal
               value={costCode}
               onChangeText={setCostCode}
               placeholder="e.g. 03-300 Concrete / Materials"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <Text style={styles.fieldLabel}>Category</Text>
+            <TextInput
+              style={styles.input}
+              value={category}
+              onChangeText={setCategory}
+              placeholder="e.g. Travel, Meals, Supplies"
               placeholderTextColor={colors.textMuted}
             />
 
