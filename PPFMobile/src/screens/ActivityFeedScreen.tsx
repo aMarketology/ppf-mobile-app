@@ -31,7 +31,7 @@ import {
   type AppStateStatus,
 } from 'react-native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
-import { Camera, FileText, Heart, Image as ImageIcon, MessageCircle, Receipt, Repeat2 } from 'lucide-react-native';
+import { Camera, FileText, Heart, Image as ImageIcon, MessageCircle, Receipt, Repeat2, User } from 'lucide-react-native';
 import { useAuth } from '../context/AuthContext';
 import { fetchActivities, subscribeToActivities } from '../services/activities';
 import { createPost, fetchComments, createComment, fetchFeed, toggleLike, deleteComment } from '../services/feed';
@@ -78,9 +78,9 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(months / 12)}y`;
 }
 
-type Props = { onNavigate: (screen: string) => void; onOpenProfile?: (userId: string) => void };
+type Props = { onNavigate: (screen: string) => void; onOpenProfile?: (userId: string) => void; cameraRequest?: number };
 
-export default function ActivityFeedScreen({ onNavigate, onOpenProfile }: Props) {
+export default function ActivityFeedScreen({ onNavigate, onOpenProfile, cameraRequest = 0 }: Props) {
   const { session, user } = useAuth();
   const { colors } = useTheme();
   const styles = createStyles(colors);
@@ -167,7 +167,17 @@ export default function ActivityFeedScreen({ onNavigate, onOpenProfile }: Props)
     }
   }, [jwt]);
 
-  useEffect(() => { load(0, activeFilter, ''); }, [load]);
+  useEffect(() => { load(0, activeFilter, '', false); }, [load, activeFilter]);
+
+  // Center + button → open camera directly
+  useEffect(() => {
+    if (cameraRequest > 0) {
+      setShowCreate(true);
+      // Auto-trigger camera after the modal opens
+      const t = setTimeout(() => { takePhoto(); }, 400);
+      return () => clearTimeout(t);
+    }
+  }, [cameraRequest]);
 
   useEffect(() => {
     if (!jwt) return;
@@ -335,6 +345,15 @@ export default function ActivityFeedScreen({ onNavigate, onOpenProfile }: Props)
           <Text style={styles.composePlaceholder} numberOfLines={1}>
             What's up? Write your post or need help with a project?
           </Text>
+        </TouchableOpacity>
+
+        {/* Profile button — opens own profile (outside the compose bubble) */}
+        <TouchableOpacity
+          style={styles.composeProfileBtn}
+          onPress={() => onNavigate('Profile')}
+          activeOpacity={0.7}
+        >
+          <User size={22} color={colors.textPrimary} />
         </TouchableOpacity>
       </View>
 
@@ -790,15 +809,23 @@ const createStyles = (colors: any) => StyleSheet.create({
 
   // Compose prompt (Twitter-style)
   composeWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingHorizontal: 16, paddingVertical: 10,
     backgroundColor: colors.card,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   composeBox: {
+    flex: 1,
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.bg,
     borderRadius: 24,
     paddingVertical: 10, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  composeProfileBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.mintLight,
+    alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: colors.border,
   },
   composeAvatar: {

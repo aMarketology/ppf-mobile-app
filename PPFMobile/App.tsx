@@ -37,6 +37,7 @@ function AppContent() {
   const [selectedRfq, setSelectedRfq] = useState<any>(null);
   const [selectedService, setSelectedService] = useState<ServiceWithProvider | null>(null);
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
+  const [cameraRequest, setCameraRequest] = useState(0);
   const insets = useSafeAreaInsets();
 
   if (loading) {
@@ -54,7 +55,7 @@ function AppContent() {
 
   const renderScreen = () => {
     switch (activeTab) {
-      case 'Activity':    return <ActivityFeedScreen onNavigate={setActiveTab} onOpenProfile={(uid) => { setViewingUserId(uid); setActiveTab('UserProfile'); }} />;
+      case 'Activity':    return <ActivityFeedScreen onNavigate={setActiveTab} onOpenProfile={(uid) => { setViewingUserId(uid); setActiveTab('UserProfile'); }} cameraRequest={cameraRequest} />;
       case 'Shop':        return <MarketplaceScreen onNavigate={setActiveTab} onOpenService={(svc) => { setSelectedService(svc); setActiveTab('ServiceDetail'); }} />;
       case 'RFQ':         return <RFQMarketplaceScreen onNavigate={setActiveTab} onSelectRfq={setSelectedRfq} />;
       case 'Feed':        return <FeedScreen onNavigate={setActiveTab} />;
@@ -84,11 +85,10 @@ function AppContent() {
         activeTab={activeTab}
         onTabPress={setActiveTab}
         unreadMessages={0}
-        onCreatePress={(action) => {
-          // Center + button → create action sheet
-          if (action === 'PostService') setActiveTab('PostService');
-          else if (action === 'CreateRFQ') setActiveTab('CreateRFQ');
-          else if (action === 'ScanReceipt') setActiveTab('ScanReceipt');
+        onCameraPress={() => {
+          // Center + button → go to Feed and open the camera
+          setActiveTab('Activity');
+          setCameraRequest(Date.now());
         }}
       />
     </View>
