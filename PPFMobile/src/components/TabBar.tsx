@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ShoppingBag, FileText, Activity, MessageCircle } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
@@ -151,49 +151,69 @@ export default function TabBar({ activeTab, onTabPress, unreadMessages = 0, onCr
       paddingHorizontal: 16,
     },
     optionCard: {
-      flex: 1,
-      borderRadius: 16,
-      borderWidth: 2,
-      borderColor: colors.border,
-      backgroundColor: colors.bg,
-      paddingVertical: 20,
+      flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
+      padding: 16,
+      borderRadius: 12,
+      marginBottom: 12,
+      borderWidth: 1,
+      marginHorizontal: 16,
     },
-    optionCardDefault: {
-      borderColor: colors.orange,
+    primaryOption: {
       backgroundColor: colors.orangeLight,
+      borderColor: colors.orange,
+    },
+    disabledOption: {
+      backgroundColor: colors.bg,
+      borderColor: colors.border,
     },
     optionIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: colors.white,
-      alignItems: 'center',
-      justifyContent: 'center',
+      fontSize: 28,
+      marginRight: 14,
     },
-    optionLabel: {
-      fontFamily: fonts.bold,
-      fontSize: 15,
+    optionTextContainer: {
+      flex: 1,
+    },
+    badgeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 4,
+    },
+    optionTitle: {
+      fontFamily: fonts.semiBold,
+      fontSize: 16,
       color: colors.textPrimary,
     },
-    optionDesc: {
-      fontFamily: fonts.regular,
-      fontSize: 11,
+    disabledText: {
       color: colors.textMuted,
-      textAlign: 'center',
-      paddingHorizontal: 8,
     },
-    defaultBadge: {
+    optionDescription: {
+      fontFamily: fonts.regular,
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    activeBadge: {
       backgroundColor: colors.orange,
-      borderRadius: radius.full,
-      paddingHorizontal: 10,
-      paddingVertical: 3,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 4,
     },
-    defaultBadgeText: {
-      fontFamily: fonts.bold,
-      fontSize: 10,
+    activeBadgeText: {
       color: colors.white,
+      fontSize: 10,
+      fontFamily: fonts.bold,
+    },
+    comingSoonBadge: {
+      backgroundColor: colors.border,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 4,
+    },
+    comingSoonBadgeText: {
+      color: colors.textMuted,
+      fontSize: 10,
+      fontFamily: fonts.bold,
     },
     sheetCancel: {
       alignItems: 'center',
@@ -210,6 +230,15 @@ export default function TabBar({ activeTab, onTabPress, unreadMessages = 0, onCr
   const handleCreate = () => {
     setShowCreate(false);
     onCreatePress?.();
+  };
+
+  const handleProjectPress = () => {
+    setShowCreate(false);
+    Alert.alert(
+      'Coming Soon',
+      'Project posting is currently under development and will be available in an upcoming update.',
+      [{ text: 'OK' }],
+    );
   };
 
   return (
@@ -277,46 +306,57 @@ export default function TabBar({ activeTab, onTabPress, unreadMessages = 0, onCr
         })}
       </View>
 
-      {/* Create bottom sheet — Project or Receipt */}
+      {/* Create action sheet — Scan Receipt (active) / Project (coming soon) */}
       <Modal
         visible={showCreate}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowCreate(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowCreate(false)}>
           <Pressable style={styles.sheet} onPress={() => {}}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>What do you want to add?</Text>
-            <Text style={styles.sheetSub}>Choose an option to get started</Text>
+            <Text style={styles.sheetTitle}>Create New Entry</Text>
+            <Text style={styles.sheetSub}>Select what you would like to upload</Text>
 
-            <View style={styles.optionRow}>
-              {/* Project — opens camera to create a post */}
-              <TouchableOpacity
-                style={styles.optionCard}
-                onPress={handleCreate}
-                activeOpacity={0.85}>
-                <View style={styles.optionIcon}>
-                  <Text style={{ fontSize: 24 }}>📋</Text>
+            {/* Primary action — Scan Receipt (active) */}
+            <TouchableOpacity
+              style={[styles.optionCard, styles.primaryOption]}
+              onPress={handleCreate}
+              activeOpacity={0.85}>
+              <Text style={styles.optionIcon}>🧾</Text>
+              <View style={styles.optionTextContainer}>
+                <View style={styles.badgeRow}>
+                  <Text style={styles.optionTitle}>Scan Receipt</Text>
+                  <View style={styles.activeBadge}>
+                    <Text style={styles.activeBadgeText}>READY</Text>
+                  </View>
                 </View>
-                <Text style={styles.optionLabel}>Project</Text>
-                <Text style={styles.optionDesc}>Take a photo and share a project update</Text>
-              </TouchableOpacity>
+                <Text style={styles.optionDescription}>
+                  Snap receipt, extract OCR totals, and assign Job # & Cost Code
+                </Text>
+              </View>
+            </TouchableOpacity>
 
-              {/* Receipt — default, scans a receipt into the system */}
-              <TouchableOpacity
-                style={[styles.optionCard, styles.optionCardDefault]}
-                onPress={handleCreate}
-                activeOpacity={0.85}>
-                <View style={styles.optionIcon}>
-                  <Text style={{ fontSize: 24 }}>🧾</Text>
+            {/* Secondary action — Project post (coming soon) */}
+            <TouchableOpacity
+              style={[styles.optionCard, styles.disabledOption]}
+              onPress={handleProjectPress}
+              activeOpacity={0.85}>
+              <Text style={styles.optionIcon}>🏗️</Text>
+              <View style={styles.optionTextContainer}>
+                <View style={styles.badgeRow}>
+                  <Text style={[styles.optionTitle, styles.disabledText]}>
+                    New Project Post
+                  </Text>
+                  <View style={styles.comingSoonBadge}>
+                    <Text style={styles.comingSoonBadgeText}>COMING SOON</Text>
+                  </View>
                 </View>
-                <Text style={styles.optionLabel}>Receipt</Text>
-                <Text style={styles.optionDesc}>Scan a receipt to add it to your records</Text>
-                <View style={styles.defaultBadge}>
-                  <Text style={styles.defaultBadgeText}>DEFAULT</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
+                <Text style={[styles.optionDescription, styles.disabledText]}>
+                  Share job-site updates and photos directly to the company feed
+                </Text>
+              </View>
+            </TouchableOpacity>
 
             <TouchableOpacity style={styles.sheetCancel} onPress={() => setShowCreate(false)}>
               <Text style={styles.sheetCancelText}>Cancel</Text>

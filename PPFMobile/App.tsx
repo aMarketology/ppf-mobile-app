@@ -89,8 +89,8 @@ function AppContent() {
         onTabPress={setActiveTab}
         unreadMessages={0}
         onCreatePress={() => {
-          // Center + button → open the in-app camera (Instagram-style)
-          setActiveTab('Camera');
+          // Center + button → action sheet → Scan Receipt (active action)
+          setActiveTab('ScanReceipt');
         }}
       />
     </View>
