@@ -40,6 +40,7 @@ function AppContent() {
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [cameraRequest, setCameraRequest] = useState(0);
   const [pendingProjectImage, setPendingProjectImage] = useState<{ base64: string; uri: string } | null>(null);
+  const [scanAutoLaunch, setScanAutoLaunch] = useState(false);
   const insets = useSafeAreaInsets();
 
   if (loading) {
@@ -73,7 +74,7 @@ function AppContent() {
       case 'Settings':    return <SettingsScreen onBack={() => setActiveTab('Profile')} onNavigate={setActiveTab} />;
       case 'ServiceDetail': return selectedService ? <ServiceDetailScreen service={selectedService} onBack={() => setActiveTab('Shop')} onNavigate={setActiveTab} /> : <MarketplaceScreen onNavigate={setActiveTab} />;
       case 'Receipts':    return <ReceiptsScreen onNavigate={setActiveTab} />;
-      case 'ScanReceipt': return <ScanReceiptScreen onBack={() => setActiveTab('Receipts')} onNavigate={setActiveTab} />;
+      case 'ScanReceipt': return <ScanReceiptScreen onBack={() => setActiveTab('Receipts')} onNavigate={setActiveTab} autoLaunch={scanAutoLaunch} />;
       case 'Camera':      return <CameraScreen onBack={() => setActiveTab('Activity')} onNavigate={setActiveTab} onProjectImage={(base64, uri) => { setPendingProjectImage({ base64, uri }); }} />;
       case 'UserProfile': return viewingUserId ? <UserProfileScreen userId={viewingUserId} onBack={() => setActiveTab('Activity')} /> : <ActivityFeedScreen onNavigate={setActiveTab} />;
       default:            return <ActivityFeedScreen onNavigate={setActiveTab} />;
@@ -90,6 +91,7 @@ function AppContent() {
         unreadMessages={0}
         onCreatePress={() => {
           // Center + button → action sheet → Scan Receipt (active action)
+          setScanAutoLaunch(true);
           setActiveTab('ScanReceipt');
         }}
       />

@@ -5,7 +5,7 @@
  * scan-receipt Edge Function for OCR processing, and displays results.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import { spacing, radius, fonts, shadows } from '../theme';
 type Props = {
   onBack: () => void;
   onNavigate: (screen: string) => void;
+  autoLaunch?: boolean;
 };
 
 interface ParsedReceipt {
@@ -41,11 +42,12 @@ interface ParsedReceipt {
   line_items?: Array<{ description: string; quantity: number; unit_price: number; total: number }>;
 }
 
-export default function ScanReceiptScreen({ onBack, onNavigate }: Props) {
+export default function ScanReceiptScreen({ onBack, onNavigate, autoLaunch = false }: Props) {
   const { session } = useAuth();
   const { colors } = useTheme();
   const jwt = session?.access_token ?? '';
   const styles = createStyles(colors);
+  const autoLaunched = useRef(false);
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
@@ -61,6 +63,15 @@ export default function ScanReceiptScreen({ onBack, onNavigate }: Props) {
   const [costCode, setCostCode] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Auto-launch camera when opened from the + button
+  useEffect(() => {
+    if (autoLaunch && !autoLaunched.current) {
+      autoLaunched.current = true;
+      const t = setTimeout(() => { takePhoto(); }, 400);
+      return () => clearTimeout(t);
+    }
+  }, [autoLaunch]);
 
   async function takePhoto() {
     const res = await launchCamera({
