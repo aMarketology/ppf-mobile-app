@@ -25,6 +25,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import ServiceDetailScreen from './src/screens/ServiceDetailScreen';
 import ReceiptsScreen from './src/screens/ReceiptsScreen';
 import ScanReceiptScreen from './src/screens/ScanReceiptScreen';
+import CameraScreen from './src/screens/CameraScreen';
 import UserProfileScreen from './src/screens/UserProfileScreen';
 import type { ServiceWithProvider } from './src/services/servicesService';
 
@@ -38,6 +39,7 @@ function AppContent() {
   const [selectedService, setSelectedService] = useState<ServiceWithProvider | null>(null);
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [cameraRequest, setCameraRequest] = useState(0);
+  const [pendingProjectImage, setPendingProjectImage] = useState<{ base64: string; uri: string } | null>(null);
   const insets = useSafeAreaInsets();
 
   if (loading) {
@@ -72,6 +74,7 @@ function AppContent() {
       case 'ServiceDetail': return selectedService ? <ServiceDetailScreen service={selectedService} onBack={() => setActiveTab('Shop')} onNavigate={setActiveTab} /> : <MarketplaceScreen onNavigate={setActiveTab} />;
       case 'Receipts':    return <ReceiptsScreen onNavigate={setActiveTab} />;
       case 'ScanReceipt': return <ScanReceiptScreen onBack={() => setActiveTab('Receipts')} onNavigate={setActiveTab} />;
+      case 'Camera':      return <CameraScreen onBack={() => setActiveTab('Activity')} onNavigate={setActiveTab} onProjectImage={(base64, uri) => { setPendingProjectImage({ base64, uri }); }} />;
       case 'UserProfile': return viewingUserId ? <UserProfileScreen userId={viewingUserId} onBack={() => setActiveTab('Activity')} /> : <ActivityFeedScreen onNavigate={setActiveTab} />;
       default:            return <ActivityFeedScreen onNavigate={setActiveTab} />;
     }
@@ -85,15 +88,9 @@ function AppContent() {
         activeTab={activeTab}
         onTabPress={setActiveTab}
         unreadMessages={0}
-        onCreatePress={(action) => {
-          if (action === 'project') {
-            // Project → go to Feed and open the camera
-            setActiveTab('Activity');
-            setCameraRequest(Date.now());
-          } else if (action === 'receipt') {
-            // Receipt → open the receipt scanner
-            setActiveTab('ScanReceipt');
-          }
+        onCreatePress={() => {
+          // Center + button → open the in-app camera (Instagram-style)
+          setActiveTab('Camera');
         }}
       />
     </View>

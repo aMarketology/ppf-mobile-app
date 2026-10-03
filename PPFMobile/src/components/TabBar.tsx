@@ -16,7 +16,7 @@ type Props = {
   activeTab: string;
   onTabPress: (tab: string) => void;
   unreadMessages?: number;
-  onCreatePress?: (action: 'project' | 'receipt') => void;
+  onCreatePress?: () => void;
 };
 
 export default function TabBar({ activeTab, onTabPress, unreadMessages = 0, onCreatePress }: Props) {
@@ -207,9 +207,9 @@ export default function TabBar({ activeTab, onTabPress, unreadMessages = 0, onCr
     },
   });
 
-  const handleCreate = (action: 'project' | 'receipt') => {
+  const handleCreate = () => {
     setShowCreate(false);
-    onCreatePress?.(action);
+    onCreatePress?.();
   };
 
   return (
@@ -236,7 +236,7 @@ export default function TabBar({ activeTab, onTabPress, unreadMessages = 0, onCr
           );
         })}
 
-        {/* Center + button — opens create sheet */}
+        {/* Center + button — opens camera */}
         <View style={styles.centerWrap}>
           <TouchableOpacity
             style={styles.centerBtn}
@@ -293,7 +293,7 @@ export default function TabBar({ activeTab, onTabPress, unreadMessages = 0, onCr
               {/* Project — opens camera to create a post */}
               <TouchableOpacity
                 style={styles.optionCard}
-                onPress={() => handleCreate('project')}
+                onPress={handleCreate}
                 activeOpacity={0.85}>
                 <View style={styles.optionIcon}>
                   <Text style={{ fontSize: 24 }}>📋</Text>
@@ -305,7 +305,7 @@ export default function TabBar({ activeTab, onTabPress, unreadMessages = 0, onCr
               {/* Receipt — default, scans a receipt into the system */}
               <TouchableOpacity
                 style={[styles.optionCard, styles.optionCardDefault]}
-                onPress={() => handleCreate('receipt')}
+                onPress={handleCreate}
                 activeOpacity={0.85}>
                 <View style={styles.optionIcon}>
                   <Text style={{ fontSize: 24 }}>🧾</Text>
