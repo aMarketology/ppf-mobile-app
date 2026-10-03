@@ -85,10 +85,15 @@ function AppContent() {
         activeTab={activeTab}
         onTabPress={setActiveTab}
         unreadMessages={0}
-        onCameraPress={() => {
-          // Center + button → go to Feed and open the camera
-          setActiveTab('Activity');
-          setCameraRequest(Date.now());
+        onCreatePress={(action) => {
+          if (action === 'project') {
+            // Project → go to Feed and open the camera
+            setActiveTab('Activity');
+            setCameraRequest(Date.now());
+          } else if (action === 'receipt') {
+            // Receipt → open the receipt scanner
+            setActiveTab('ScanReceipt');
+          }
         }}
       />
     </View>
