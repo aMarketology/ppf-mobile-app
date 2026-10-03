@@ -36,6 +36,7 @@ import { useAuth } from '../context/AuthContext';
 import { fetchActivities, subscribeToActivities } from '../services/activities';
 import { createPost, fetchComments, createComment, fetchFeed, toggleLike, deleteComment } from '../services/feed';
 import { useTheme } from '../context/ThemeContext';
+import { ENV } from '../config/env';
 import { spacing, radius, fonts, shadows } from '../theme';
 import type { SiteActivity, ActivityType, ActivityFilter, FeedPost, FeedComment } from '../lib/types';
 
@@ -106,6 +107,9 @@ export default function ActivityFeedScreen({ onNavigate, onOpenProfile }: Props)
   const [postImage, setPostImage] = useState<string | null>(null);
   const [postImageBase64, setPostImageBase64] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // Vision assist
+  const [assisting, setAssisting] = useState(false);
+  const [assistError, setAssistError] = useState<string | null>(null);
 
   // Comment sheet
   const [commentPost, setCommentPost] = useState<FeedPost | null>(null);
@@ -209,6 +213,38 @@ export default function ActivityFeedScreen({ onNavigate, onOpenProfile }: Props)
     const asset = res.assets?.[0];
     if (asset?.uri) setPostImage(asset.uri ?? null);
     if (asset?.base64) setPostImageBase64(asset.base64 ?? null);
+  }
+
+  // ── Vision assist: analyze the attached image and pre-fill the post ──────
+  async function runVisionAssist() {
+    if (!postImageBase64) {
+      Alert.alert('Add an image first', 'Attach a photo, then tap "✨ Auto-write" to generate your post.');
+      return;
+    }
+    setAssisting(true);
+    setAssistError(null);
+    try {
+      const res = await fetch(`${ENV.SUPABASE_URL}/functions/v1/vision-assist`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${jwt}`,
+        },
+        body: JSON.stringify({ image_base64: postImageBase64 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? 'Vision assist failed');
+
+      // Pre-fill the post body with the suggested text (user can edit)
+      const suggested = data.suggested_body || data.ocr_text || '';
+      if (suggested) setPostText(suggested);
+      Alert.alert('✨ Draft ready!', 'We analyzed your image and drafted a post. Edit it before publishing.');
+    } catch (e: any) {
+      setAssistError(e?.message ?? 'Could not analyze image');
+      Alert.alert('Vision assist failed', e?.message ?? 'Could not analyze image');
+    } finally {
+      setAssisting(false);
+    }
   }
 
   async function handleLike(postId: string) {
@@ -620,6 +656,21 @@ export default function ActivityFeedScreen({ onNavigate, onOpenProfile }: Props)
               <TouchableOpacity style={styles.toolIconBtn} onPress={pickImage} activeOpacity={0.7}>
                 <ImageIcon size={20} color={colors.textPrimary} />
               </TouchableOpacity>
+              {postImageBase64 && (
+                <TouchableOpacity
+                  style={[styles.toolNavBtn, assisting && styles.toolNavBtnDisabled]}
+                  onPress={runVisionAssist}
+                  disabled={assisting}
+                  activeOpacity={0.7}
+                >
+                  {assisting ? (
+                    <ActivityIndicator size="small" color={colors.mint} style={{ marginRight: 6 }} />
+                  ) : (
+                    <Text style={{ fontSize: 14, marginRight: 6 }}>✨</Text>
+                  )}
+                  <Text style={styles.toolNavBtnText}>{assisting ? 'Analyzing…' : 'Auto-write'}</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={styles.toolNavBtn}
                 onPress={() => { setShowCreate(false); onNavigate('ScanReceipt'); }}
@@ -955,6 +1006,9 @@ const createStyles = (colors: any) => StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  toolNavBtnDisabled: {
+    opacity: 0.6,
   },
   toolNavBtnText: {
     fontFamily: fonts.semiBold,

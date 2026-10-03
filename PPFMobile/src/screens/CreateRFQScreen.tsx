@@ -8,11 +8,14 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { restPost } from '../lib/restClient';
-import { colors, spacing, radius, fonts } from '../theme';
+import { ENV } from '../config/env';
+import { spacing, radius, fonts } from '../theme';
 
 const CATEGORIES = [
   'CNC Machining', 'Industrial Parts & Replacement', 'Sheet Metal & Fabrication',
@@ -27,6 +30,8 @@ type Props = { onBack: () => void; onNavigate: (s: string) => void };
 
 export default function CreateRFQScreen({ onBack, onNavigate }: Props) {
   const { session, profile } = useAuth();
+  const { colors } = useTheme();
+  const styles = createStyles(colors);
   const jwt = session?.access_token ?? '';
 
   const [step, setStep] = useState(1);
@@ -50,6 +55,11 @@ export default function CreateRFQScreen({ onBack, onNavigate }: Props) {
   // Step 3: Line Items
   const [lineItems, setLineItems] = useState<{ part: string; qty: string; material: string; tolerance: string; finish: string; notes: string }[]>([]);
 
+  // Vision assist
+  const [rfqImage, setRfqImage] = useState<string | null>(null);
+  const [rfqImageBase64, setRfqImageBase64] = useState<string | null>(null);
+  const [assisting, setAssisting] = useState(false);
+
   function addLineItem() {
     setLineItems(prev => [...prev, { part: '', qty: '', material: '', tolerance: '', finish: '', notes: '' }]);
   }
@@ -60,6 +70,45 @@ export default function CreateRFQScreen({ onBack, onNavigate }: Props) {
 
   function removeLineItem(index: number) {
     setLineItems(prev => prev.filter((_, i) => i !== index));
+  }
+
+  // ── Vision assist: analyze an image and pre-fill title + description ─────
+  async function pickRfqImage() {
+    const res = await launchImageLibrary({
+      mediaType: 'photo', quality: 0.8, maxWidth: 1024, maxHeight: 1024, includeBase64: true,
+    });
+    if (res.didCancel) return;
+    const asset = res.assets?.[0];
+    if (asset?.uri) setRfqImage(asset.uri ?? null);
+    if (asset?.base64) setRfqImageBase64(asset.base64 ?? null);
+  }
+
+  async function runVisionAssist() {
+    if (!rfqImageBase64) {
+      Alert.alert('Add an image first', 'Attach a drawing or spec sheet, then tap "✨ Auto-write".');
+      return;
+    }
+    setAssisting(true);
+    try {
+      const res = await fetch(`${ENV.SUPABASE_URL}/functions/v1/vision-assist`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${jwt}`,
+        },
+        body: JSON.stringify({ image_base64: rfqImageBase64 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? 'Vision assist failed');
+
+      if (data.suggested_title && !title) setTitle(data.suggested_title);
+      if (data.suggested_body && !description) setDescription(data.suggested_body);
+      Alert.alert('✨ Draft ready!', 'We analyzed your image and drafted a title + description. Review before submitting.');
+    } catch (e: any) {
+      Alert.alert('Vision assist failed', e?.message ?? 'Could not analyze image');
+    } finally {
+      setAssisting(false);
+    }
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -158,6 +207,34 @@ export default function CreateRFQScreen({ onBack, onNavigate }: Props) {
         </View>
         <Text style={styles.fieldLabel}>Description *</Text>
         <TextInput style={[styles.input, styles.textArea]} value={description} onChangeText={setDescription} placeholder="Describe what you need in detail..." placeholderTextColor={colors.textMuted} multiline numberOfLines={5} textAlignVertical="top" />
+
+        {/* Vision assist — attach a drawing/spec and auto-write */}
+        <Text style={styles.fieldLabel}>Attach a drawing or spec sheet (optional)</Text>
+        {rfqImage && (
+          <View style={styles.rfqImageWrap}>
+            <Image source={{ uri: rfqImage }} style={styles.rfqImage} />
+            <TouchableOpacity style={styles.rfqRemoveImage} onPress={() => { setRfqImage(null); setRfqImageBase64(null); }}>
+              <Text style={styles.rfqRemoveImageText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        <View style={styles.assistRow}>
+          <TouchableOpacity style={styles.assistBtn} onPress={pickRfqImage} activeOpacity={0.7}>
+            <Text style={styles.assistBtnText}>🖼️ Attach Image</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.assistBtn, styles.assistBtnPrimary, assisting && styles.assistBtnDisabled]}
+            onPress={runVisionAssist}
+            disabled={assisting}
+            activeOpacity={0.7}
+          >
+            {assisting ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.assistBtnPrimaryText}>✨ Auto-write</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -300,7 +377,7 @@ export default function CreateRFQScreen({ onBack, onNavigate }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: any) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: 14, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
   backBtn: { fontSize: 15, fontFamily: fonts.semiBold, color: colors.mint },
@@ -353,4 +430,38 @@ const styles = StyleSheet.create({
   footerBtnOutlineText: { fontFamily: fonts.semiBold, fontSize: 15, color: colors.textSecondary },
   footerBtn: { flex: 2, paddingVertical: 14, borderRadius: radius.md, backgroundColor: colors.mint, alignItems: 'center' },
   footerBtnText: { fontFamily: fonts.bold, fontSize: 15, color: colors.white },
+
+  // Vision assist
+  rfqImageWrap: {
+    position: 'relative',
+    marginBottom: spacing.sm,
+  },
+  rfqImage: {
+    width: '100%', height: 160, borderRadius: radius.md,
+    backgroundColor: colors.bg,
+  },
+  rfqRemoveImage: {
+    position: 'absolute', top: 8, right: 8,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  rfqRemoveImageText: { fontSize: 14, color: '#fff', fontWeight: '700' },
+  assistRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+  assistBtn: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+  },
+  assistBtnPrimary: {
+    backgroundColor: colors.mint,
+    borderColor: colors.mint,
+  },
+  assistBtnDisabled: { opacity: 0.6 },
+  assistBtnText: { fontFamily: fonts.semiBold, fontSize: 13, color: colors.textPrimary },
+  assistBtnPrimaryText: { fontFamily: fonts.bold, fontSize: 13, color: colors.white },
 });
