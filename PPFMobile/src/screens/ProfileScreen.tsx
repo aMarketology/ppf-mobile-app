@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking,
 } from 'react-native';
 import { colors, radius, spacing } from '../theme';
 import { useAuth } from '../context/AuthContext';
@@ -56,6 +56,17 @@ export default function ProfileScreen({ onNavigate }: Props) {
     );
   }
 
+  // Extract job title and social links from profile
+  const jobTitle = (profile as any)?.job_title ?? '';
+  const socialLinks = [
+    { key: 'linkedin',  url: (profile as any)?.linkedin_url,  icon: '🔗' },
+    { key: 'twitter',   url: (profile as any)?.twitter_url,   icon: '𝕏' },
+    { key: 'github',    url: (profile as any)?.github_url,    icon: '🐙' },
+    { key: 'youtube',   url: (profile as any)?.youtube_url,   icon: '▶️' },
+    { key: 'instagram', url: (profile as any)?.instagram_url, icon: '📷' },
+    { key: 'website',   url: (profile as any)?.website_url,   icon: '🌐' },
+  ].filter(link => !!link.url); // Only include links that are set
+
   return (
     <ScrollView style={s.container} showsVerticalScrollIndicator={false}>
       {/* Profile card */}
@@ -68,9 +79,25 @@ export default function ProfileScreen({ onNavigate }: Props) {
         <View style={s.typeBadge}>
           <Text style={s.typeText}>{accountType}</Text>
         </View>
+        {jobTitle ? <Text style={s.jobTitle}>{jobTitle}</Text> : null}
         <TouchableOpacity style={s.editBtn} onPress={() => onNavigate('Settings')}>
           <Text style={s.editBtnText}>Edit Profile / Settings</Text>
         </TouchableOpacity>
+
+        {/* Social links — tap to open */}
+        {socialLinks.length > 0 && (
+          <View style={s.socialRow}>
+            {socialLinks.map(link => (
+              <TouchableOpacity
+                key={link.key}
+                style={s.socialChip}
+                onPress={() => Linking.openURL(link.url)}
+                activeOpacity={0.7}>
+                <Text style={s.socialChipIcon}>{link.icon}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Token balance card */}
@@ -143,6 +170,12 @@ const createStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 5, marginBottom: 16,
   },
   typeText: { fontSize: 12, fontWeight: '700', color: colors.white },
+  jobTitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: -6,
+    marginBottom: 12,
+  },
   editBtn:     { backgroundColor: colors.white, borderRadius: radius.md, paddingHorizontal: 24, paddingVertical: 10 },
   editBtnText: { fontSize: 13, fontWeight: '700', color: colors.mint },
   // Token card
@@ -182,4 +215,23 @@ const createStyles = (colors: any) => StyleSheet.create({
   },
   signOutText: { fontSize: 15, fontWeight: '700', color: colors.error },
   version: { textAlign: 'center', marginTop: 16, fontSize: 12, color: colors.textMuted },
+  // Social chips
+  socialRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 14,
+  },
+  socialChip: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  socialChipIcon: { fontSize: 17 },
 });

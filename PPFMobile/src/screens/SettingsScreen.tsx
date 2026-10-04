@@ -51,6 +51,14 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
   const [companyName, setCompanyName] = useState('');
   const [bio, setBio] = useState('');
   const [location, setLocation] = useState('');
+  // Social profiles
+  const [jobTitle, setJobTitle] = useState('');
+  const [linkedinUrl, setLinkedinUrl] = useState('');
+  const [twitterUrl, setTwitterUrl] = useState('');
+  const [githubUrl, setGithubUrl] = useState('');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [instagramUrl, setInstagramUrl] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Security form
@@ -65,8 +73,24 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
       setFullName(profile.full_name ?? '');
       setBio(profile.bio ?? '');
       setLocation(profile.location ?? '');
+      setJobTitle((profile as any).job_title ?? '');
+      setLinkedinUrl((profile as any).linkedin_url ?? '');
+      setTwitterUrl((profile as any).twitter_url ?? '');
+      setGithubUrl((profile as any).github_url ?? '');
+      setYoutubeUrl((profile as any).youtube_url ?? '');
+      setInstagramUrl((profile as any).instagram_url ?? '');
+      setWebsiteUrl((profile as any).website_url ?? '');
     }
   }, [profile]);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  // Users often paste "linkedin.com/in/name" — prefix https:// if missing.
+  function normalizeUrl(raw: string): string | null {
+    const v = raw.trim();
+    if (!v) return null;
+    return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+  }
 
   // ── Save Profile ──────────────────────────────────────────────────────────
 
@@ -80,6 +104,13 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
           full_name: fullName.trim() || null,
           bio: bio.trim() || null,
           location: location.trim() || null,
+          job_title: jobTitle.trim() || null,
+          linkedin_url: normalizeUrl(linkedinUrl) || null,
+          twitter_url: normalizeUrl(twitterUrl) || null,
+          github_url: normalizeUrl(githubUrl) || null,
+          youtube_url: normalizeUrl(youtubeUrl) || null,
+          instagram_url: normalizeUrl(instagramUrl) || null,
+          website_url: normalizeUrl(websiteUrl) || null,
         },
         jwt,
       );
@@ -216,6 +247,110 @@ export default function SettingsScreen({ onBack, onNavigate }: Props) {
               placeholder="City, State"
               placeholderTextColor={colors.textMuted}
             />
+
+            {/* ── Social Profiles ─────────────────────────────────────────── */}
+            <View style={styles.socialSection}>
+              <Text style={styles.sectionTitle}>Social Profiles</Text>
+              <Text style={styles.socialHint}>
+                Connect your accounts so other professionals can find and network with you.
+              </Text>
+
+              <View style={styles.socialRow}>
+                <Text style={styles.socialIcon}>💼</Text>
+                <TextInput
+                  style={styles.socialInput}
+                  value={jobTitle}
+                  onChangeText={setJobTitle}
+                  placeholder="Job title (e.g. Senior PLC Engineer)"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <View style={styles.socialRow}>
+                <Text style={styles.socialIcon}>🔗</Text>
+                <TextInput
+                  style={styles.socialInput}
+                  value={linkedinUrl}
+                  onChangeText={setLinkedinUrl}
+                  placeholder="linkedin.com/in/yourname"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+
+              <View style={styles.socialRow}>
+                <Text style={styles.socialIcon}>𝕏</Text>
+                <TextInput
+                  style={styles.socialInput}
+                  value={twitterUrl}
+                  onChangeText={setTwitterUrl}
+                  placeholder="x.com/yourhandle"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+
+              <View style={styles.socialRow}>
+                <Text style={styles.socialIcon}>🐙</Text>
+                <TextInput
+                  style={styles.socialInput}
+                  value={githubUrl}
+                  onChangeText={setGithubUrl}
+                  placeholder="github.com/yourusername"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+
+              <View style={styles.socialRow}>
+                <Text style={styles.socialIcon}>▶️</Text>
+                <TextInput
+                  style={styles.socialInput}
+                  value={youtubeUrl}
+                  onChangeText={setYoutubeUrl}
+                  placeholder="youtube.com/@yourchannel"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+
+              <View style={styles.socialRow}>
+                <Text style={styles.socialIcon}>📷</Text>
+                <TextInput
+                  style={styles.socialInput}
+                  value={instagramUrl}
+                  onChangeText={setInstagramUrl}
+                  placeholder="instagram.com/yourhandle"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+
+              <View style={styles.socialRow}>
+                <Text style={styles.socialIcon}>🌐</Text>
+                <TextInput
+                  style={styles.socialInput}
+                  value={websiteUrl}
+                  onChangeText={setWebsiteUrl}
+                  placeholder="yourwebsite.com"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+            </View>
 
             {/* ── Appearance ─────────────────────────────────────────────── */}
             <View style={styles.appearanceSection}>
@@ -427,6 +562,42 @@ const styles = StyleSheet.create({
     fontSize: 17,
     color: colors.textPrimary,
     marginBottom: spacing.md,
+  },
+  socialSection: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  socialHint: {
+    fontFamily: fonts.regular,
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 17,
+    marginBottom: spacing.md,
+    marginTop: -6,
+  },
+  socialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  socialIcon: {
+    fontSize: 16,
+    width: 30,
+    textAlign: 'center',
+  },
+  socialInput: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontFamily: fonts.regular,
+    color: colors.textPrimary,
   },
 
   // Form

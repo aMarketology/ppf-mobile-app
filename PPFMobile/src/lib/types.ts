@@ -10,6 +10,14 @@ export interface Profile {
   company_id: string | null;
   created_at: string;
   token_balance: number;
+  // Social / identity links
+  job_title: string | null;
+  linkedin_url: string | null;
+  twitter_url: string | null;
+  github_url: string | null;
+  youtube_url: string | null;
+  instagram_url: string | null;
+  website_url: string | null;
 }
 
 // ─── Company Profiles ─────────────────────────────────────────────────────────
