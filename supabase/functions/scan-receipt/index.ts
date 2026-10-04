@@ -186,6 +186,31 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
+    // ── Persist the receipt image to Storage (bulletproofing) ──────────────
+    // Upload the base64 image so the back office can always view the original
+    // receipt — even after OCR, and regardless of any client-side cleanup.
+    let imageUrl: string | null = null;
+    if (image_base64) {
+      try {
+        const bytes = Uint8Array.from(atob(image_base64), c => c.charCodeAt(0));
+        const fileName = `${user.id}/${crypto.randomUUID()}.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from('receipts')
+          .upload(fileName, bytes, {
+            contentType: 'image/jpeg',
+            upsert: false,
+          });
+        if (uploadError) {
+          console.warn('Image upload failed (continuing without image):', uploadError.message);
+        } else {
+          const { data: publicUrl } = supabase.storage.from('receipts').getPublicUrl(fileName);
+          imageUrl = publicUrl?.publicUrl ?? null;
+        }
+      } catch (uploadErr) {
+        console.warn('Image upload exception (continuing without image):', uploadErr);
+      }
+    }
+
     const { data: receipt, error: insertError } = await supabase
       .from('receipts')
       .insert({
@@ -200,6 +225,7 @@ serve(async (req) => {
         cost_code: cost_code || null,
         cost_code_desc: cost_code_desc || null,
         notes: notes || null,
+        image_url: imageUrl,
         ocr_raw_text: parsed.ocr_raw_text || '',
         ocr_confidence: parsed.ocr_confidence,
         status: ocrText ? 'processed' : 'pending',

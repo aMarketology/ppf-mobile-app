@@ -42,6 +42,30 @@ interface ParsedReceipt {
   line_items?: Array<{ description: string; quantity: number; unit_price: number; total: number }>;
 }
 
+// Convert a base64 data string to a Blob for Storage upload.
+// React Native doesn't have atob/Blob natively, so we use a manual decode.
+function base64ToBlob(base64: string): Blob {
+  const clean = base64.replace(/^data:image\/\w+;base64,/, '');
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const bytes: number[] = [];
+  let buffer = 0;
+  let bits = 0;
+  for (let i = 0; i < clean.length; i++) {
+    const c = clean.charAt(i);
+    if (c === '=') break;
+    const idx = chars.indexOf(c);
+    if (idx === -1) continue;
+    buffer = (buffer << 6) | idx;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes.push((buffer >> bits) & 0xff);
+    }
+  }
+  const byteArray = new Uint8Array(bytes);
+  return new Blob([byteArray as any], { type: 'image/jpeg' } as any);
+}
+
 export default function ScanReceiptScreen({ onBack, onNavigate, autoLaunch = false }: Props) {
   const { session, profile } = useAuth();
   const { colors } = useTheme();
@@ -178,6 +202,30 @@ export default function ScanReceiptScreen({ onBack, onNavigate, autoLaunch = fal
 
     setSaving(true);
     try {
+      // ── Upload image to Storage (bulletproofing) ─────────────────────────
+      let imageUrl: string | null = null;
+      if (imageBase64) {
+        try {
+          const userId = (await (await fetch(`${ENV.SUPABASE_URL}/auth/v1/user`, {
+            headers: { apikey: ENV.SUPABASE_ANON_KEY, Authorization: `Bearer ${jwt}` },
+          })).json()).id;
+          const fileName = `${userId}/${Date.now()}.jpg`;
+          const uploadRes = await fetch(`${ENV.SUPABASE_URL}/storage/v1/object/receipts/${fileName}`, {
+            method: 'POST',
+            headers: {
+              apikey: ENV.SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${jwt}`,
+              'Content-Type': 'image/jpeg',
+              'x-upsert': 'false',
+            },
+            body: base64ToBlob(imageBase64),
+          });
+          if (uploadRes.ok) {
+            imageUrl = `${ENV.SUPABASE_URL}/storage/v1/object/public/receipts/${fileName}`;
+          }
+        } catch (_) { /* non-fatal */ }
+      }
+
       if (result?.id) {
         // Update existing receipt created by function
         await fetch(`${ENV.SUPABASE_URL}/rest/v1/receipts?id=eq.${result.id}`, {
@@ -196,6 +244,7 @@ export default function ScanReceiptScreen({ onBack, onNavigate, autoLaunch = fal
             category: category.trim() || null,
             company_id: profile?.company_id || null,
             notes: notes.trim() || null,
+            image_url: imageUrl,
             status: 'processed',
             review_status: 'pending',
           }),
@@ -225,6 +274,7 @@ export default function ScanReceiptScreen({ onBack, onNavigate, autoLaunch = fal
             category: category.trim() || null,
             company_id: profile?.company_id || null,
             notes: notes.trim() || null,
+            image_url: imageUrl,
             status: 'processed',
             review_status: 'pending',
           }),
